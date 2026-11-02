@@ -108,10 +108,35 @@ export default function LoginPage() {
     try {
       const supabase = createClient()
 
+      // Helper untuk mendeteksi apakah sesi ini berasal dari Google OAuth
+      const checkIsGoogleSession = (user: {
+        app_metadata?: { provider?: string; providers?: string[] }
+        identities?: Array<{ provider?: string }>
+      }): boolean => {
+        if (!user) return false
+        if (user.app_metadata?.provider === "google") return true
+        if (Array.isArray(user.app_metadata?.providers) && user.app_metadata.providers.includes("google")) return true
+        if (Array.isArray(user.identities) && user.identities.some((i) => i.provider === "google")) return true
+        if (typeof window !== "undefined") {
+          if (Boolean(localStorage.getItem("sp_oauth_intent"))) return true
+          if (window.location.hash.includes("access_token") || window.location.search.includes("code=")) return true
+        }
+        return false
+      }
+
       // Helper pemrosesan sesi login/daftar pengguna Google
-      const handleGoogleUserSession = async (session: { user: { id: string; email?: string; app_metadata?: { provider?: string }; user_metadata?: { full_name?: string; name?: string }; created_at?: string } }) => {
+      const handleGoogleUserSession = async (session: {
+        user: {
+          id: string
+          email?: string
+          app_metadata?: { provider?: string; providers?: string[] }
+          identities?: Array<{ provider?: string }>
+          user_metadata?: { full_name?: string; name?: string }
+          created_at?: string
+        }
+      }) => {
         if (!session?.user) return
-        const isGoogleUser = session.user.app_metadata?.provider === "google"
+        const isGoogleUser = checkIsGoogleSession(session.user)
         if (!isGoogleUser) return
 
         const userEmail = session.user.email || ""
@@ -170,7 +195,7 @@ export default function LoginPage() {
             } catch {}
           }
 
-          const status = "aktif"
+          const status = profile?.status || "aktif"
           const verified = true
 
           try {
@@ -214,17 +239,19 @@ export default function LoginPage() {
           localStorage.setItem("sp_current_user_verified", "true")
 
           setIsLoading(false)
-          router.push("/beranda")
+          router.replace("/beranda")
         } catch (err) {
           console.error("Google sign in session error:", err)
           setIsLoading(false)
-          router.push("/beranda")
+          router.replace("/beranda")
         }
       }
 
       // 1. Periksa sesi langsung saat komponen dimuat
       supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) void handleGoogleUserSession(session)
+        if (session && checkIsGoogleSession(session.user)) {
+          void handleGoogleUserSession(session)
+        }
       })
 
       // 2. Dengarkan perubahan status otentikasi
@@ -232,9 +259,9 @@ export default function LoginPage() {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!session?.user) return
-        const isGoogleUser = session.user.app_metadata?.provider === "google"
+        const isGoogleUser = checkIsGoogleSession(session.user)
 
-        if (event === "SIGNED_IN") {
+        if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
           if (isGoogleUser) {
             void handleGoogleUserSession(session)
             return
