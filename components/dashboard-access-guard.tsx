@@ -24,37 +24,66 @@ export function DashboardAccessGuard({ children }: DashboardAccessGuardProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null)
 
+  const clearSessionAndRedirectToLogin = React.useCallback(async () => {
+    try {
+      const supabase = createClient()
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      if (supabaseUrl && !supabaseUrl.includes("your-project-ref")) {
+        await supabase.auth.signOut()
+      }
+    } catch {}
+
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("sp_current_user_name")
+      localStorage.removeItem("sp_current_user_email")
+      localStorage.removeItem("sp_current_user_role")
+      localStorage.removeItem("sp_current_user_status")
+      localStorage.removeItem("sp_current_user_verified")
+      localStorage.removeItem("sp_remember_me")
+    }
+    router.replace("/login")
+  }, [router])
+
   const handleRefresh = async () => {
     setIsRefreshing(true)
     setRefreshMessage(null)
 
     try {
-      const cachedEmail = localStorage.getItem("sp_current_user_email") || ""
-      const cachedName = localStorage.getItem("sp_current_user_name") || "Staf Medis"
-      const cachedRole = (localStorage.getItem("sp_current_user_role") as NurseRole) || "perawat"
-      const cachedStatus = (localStorage.getItem("sp_current_user_status") as NurseStatus) || "aktif"
+      const cachedEmail = typeof window !== "undefined" ? localStorage.getItem("sp_current_user_email") || "" : ""
+      const cachedName = typeof window !== "undefined" ? localStorage.getItem("sp_current_user_name") || "Staf Medis" : "Staf Medis"
+      const cachedRole = (typeof window !== "undefined" ? localStorage.getItem("sp_current_user_role") : null) as NurseRole || "perawat"
+      const cachedStatus = (typeof window !== "undefined" ? localStorage.getItem("sp_current_user_status") : null) as NurseStatus || "aktif"
 
       setUserName(cachedName)
       setUserEmail(cachedEmail)
 
-      const isOwner = cachedRole === "pengelola"
-
-      if (isOwner) {
-        setUserRole("pengelola")
-        setUserStatus("aktif")
-        setIsChecking(false)
-        setIsRefreshing(false)
-        return
-      }
-
       const supabase = createClient()
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      if (supabaseUrl && !supabaseUrl.includes("your-project-ref") && cachedEmail) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role, status, full_name")
-          .eq("email", cachedEmail)
-          .single()
+      if (supabaseUrl && !supabaseUrl.includes("your-project-ref")) {
+        const { data: { user: authUser } } = await supabase.auth.getUser()
+        const emailToCheck = (cachedEmail || authUser?.email || "").trim()
+
+        if (!authUser && !emailToCheck) {
+          await clearSessionAndRedirectToLogin()
+          return
+        }
+
+        let query = supabase.from("profiles").select("id, role, status, full_name, is_verified")
+        if (authUser?.id && emailToCheck) {
+          query = query.or(`id.eq.${authUser.id},email.ilike.${emailToCheck}`)
+        } else if (authUser?.id) {
+          query = query.eq("id", authUser.id)
+        } else {
+          query = query.ilike("email", emailToCheck)
+        }
+
+        const { data: profile, error } = await query.maybeSingle()
+
+        if (!error && !profile) {
+          // Akun sudah dihapus oleh pengelola
+          await clearSessionAndRedirectToLogin()
+          return
+        }
 
         if (profile) {
           const role = (profile.role as NurseRole) || "perawat"
@@ -66,6 +95,9 @@ export function DashboardAccessGuard({ children }: DashboardAccessGuardProps) {
 
           localStorage.setItem("sp_current_user_role", role)
           localStorage.setItem("sp_current_user_status", status)
+          if (profile.full_name) {
+            localStorage.setItem("sp_current_user_name", profile.full_name)
+          }
           setIsChecking(false)
           setIsRefreshing(false)
           return
@@ -84,49 +116,68 @@ export function DashboardAccessGuard({ children }: DashboardAccessGuardProps) {
     let ignore = false
     const check = async () => {
       try {
-        const cachedEmail = localStorage.getItem("sp_current_user_email") || ""
-        const cachedName = localStorage.getItem("sp_current_user_name") || "Staf Medis"
-        const cachedRole = (localStorage.getItem("sp_current_user_role") as NurseRole) || "perawat"
-        const cachedStatus = (localStorage.getItem("sp_current_user_status") as NurseStatus) || "aktif"
-
-        const isOwner = cachedRole === "pengelola"
-
-        if (isOwner) {
-          if (!ignore) {
-            setUserRole("pengelola")
-            setUserStatus("aktif")
-            setUserName(cachedName)
-            setUserEmail(cachedEmail)
-            setIsChecking(false)
-          }
-          return
-        }
+        const cachedEmail = typeof window !== "undefined" ? localStorage.getItem("sp_current_user_email") || "" : ""
+        const cachedName = typeof window !== "undefined" ? localStorage.getItem("sp_current_user_name") || "Staf Medis" : "Staf Medis"
+        const cachedRole = (typeof window !== "undefined" ? localStorage.getItem("sp_current_user_role") : null) as NurseRole || "perawat"
+        const cachedStatus = (typeof window !== "undefined" ? localStorage.getItem("sp_current_user_status") : null) as NurseStatus || "aktif"
 
         const supabase = createClient()
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        if (supabaseUrl && !supabaseUrl.includes("your-project-ref") && cachedEmail) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("role, status, full_name")
-            .eq("email", cachedEmail)
-            .single()
 
-          if (!ignore && profile) {
-            const role = (profile.role as NurseRole) || "perawat"
-            const status = (profile.status as NurseStatus) || "pending"
+        if (supabaseUrl && !supabaseUrl.includes("your-project-ref")) {
+          // 1. Ambil data sesi Supabase Auth
+          const { data: { user: authUser } } = await supabase.auth.getUser()
+          const emailToCheck = (cachedEmail || authUser?.email || "").trim()
 
-            setUserRole(role)
-            setUserStatus(status)
-            if (profile.full_name) setUserName(profile.full_name)
-            setUserEmail(cachedEmail)
-
-            localStorage.setItem("sp_current_user_role", role)
-            localStorage.setItem("sp_current_user_status", status)
-            setIsChecking(false)
+          // Jika tidak ada user dan tidak ada email di cache, alihkan ke login
+          if (!authUser && !emailToCheck) {
+            if (!ignore) {
+              await clearSessionAndRedirectToLogin()
+            }
             return
+          }
+
+          // 2. Periksa apakah profil masih ada di tabel profiles
+          let query = supabase.from("profiles").select("id, role, status, full_name, is_verified")
+          if (authUser?.id && emailToCheck) {
+            query = query.or(`id.eq.${authUser.id},email.ilike.${emailToCheck}`)
+          } else if (authUser?.id) {
+            query = query.eq("id", authUser.id)
+          } else {
+            query = query.ilike("email", emailToCheck)
+          }
+
+          const { data: profile, error } = await query.maybeSingle()
+
+          if (!ignore) {
+            // Jika database aktif dan baris profil tidak ditemukan:
+            // Akun telah dihapus oleh pengelola, maka otomatis keluarkan dan alihkan ke login!
+            if (!error && !profile) {
+              await clearSessionAndRedirectToLogin()
+              return
+            }
+
+            if (profile) {
+              const role = (profile.role as NurseRole) || "perawat"
+              const status = (profile.status as NurseStatus) || "pending"
+
+              setUserRole(role)
+              setUserStatus(status)
+              if (profile.full_name) setUserName(profile.full_name)
+              setUserEmail(emailToCheck || profile.full_name)
+
+              localStorage.setItem("sp_current_user_role", role)
+              localStorage.setItem("sp_current_user_status", status)
+              if (profile.full_name) {
+                localStorage.setItem("sp_current_user_name", profile.full_name)
+              }
+              setIsChecking(false)
+              return
+            }
           }
         }
 
+        // Mode offline fallback jika database tidak terkoneksi
         if (!ignore) {
           setUserRole(cachedRole)
           setUserStatus(cachedStatus)
@@ -141,10 +192,21 @@ export function DashboardAccessGuard({ children }: DashboardAccessGuardProps) {
 
     void check()
 
+    // Dengarkan saat tab browser kembali aktif atau fokus agar langsung mendeteksi jika akun dihapus
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === "visible") {
+        void check()
+      }
+    }
+    window.addEventListener("focus", onFocusOrVisible)
+    document.addEventListener("visibilitychange", onFocusOrVisible)
+
     return () => {
       ignore = true
+      window.removeEventListener("focus", onFocusOrVisible)
+      document.removeEventListener("visibilitychange", onFocusOrVisible)
     }
-  }, [])
+  }, [clearSessionAndRedirectToLogin])
 
   const handleLogout = async () => {
     try {

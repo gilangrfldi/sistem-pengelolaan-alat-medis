@@ -147,7 +147,7 @@ export default function LoginPage() {
           const { data: profile } = await supabase
             .from("profiles")
             .select("id, role, status, full_name, is_verified, created_at")
-            .eq("id", session.user.id)
+            .or(`id.eq.${session.user.id},email.ilike.${userEmail}`)
             .maybeSingle()
 
           const authUserCreatedAt = session.user.created_at
@@ -170,6 +170,25 @@ export default function LoginPage() {
             setShowExistingGoogleModal(true)
             setAuthError(null)
             return
+          }
+
+          // JIKA PENGGUNA MEMILIH "MASUK DENGAN GOOGLE" TETAPI AKUN BELUM TERDAFTAR:
+          if (oauthIntent !== "signup" && !profile) {
+            let totalCount = 1
+            try {
+              const { count } = await supabase.from("profiles").select("id", { count: "exact", head: true })
+              totalCount = count ?? 0
+            } catch {}
+
+            if (totalCount > 0) {
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("sp_oauth_intent")
+              }
+              await supabase.auth.signOut()
+              setIsLoading(false)
+              setAuthError("Akun belum terdaftar. Silakan lakukan pendaftaran terlebih dahulu.")
+              return
+            }
           }
 
           // JIKA MASUK (LOGIN) ATAU PENDAFTARAN GOOGLE BARU
@@ -349,15 +368,30 @@ export default function LoginPage() {
 
       // Jalankan otentikasi nyata jika kredensial Supabase sudah diisi
       if (supabaseUrl && !supabaseUrl.includes("your-project-ref")) {
+        const trimmedEmail = loginEmail.trim()
         const { data, error } = await supabase.auth.signInWithPassword({
-          email: loginEmail,
+          email: trimmedEmail,
           password: loginPassword,
         })
 
         if (error) {
           let errorMsg = error.message
           if (error.message === "Invalid login credentials") {
-            errorMsg = "Email atau kata sandi tidak cocok. Silakan periksa kembali."
+            try {
+              const { data: existingUser } = await supabase
+                .from("profiles")
+                .select("id")
+                .ilike("email", trimmedEmail)
+                .maybeSingle()
+
+              if (!existingUser) {
+                errorMsg = "Akun belum terdaftar. Silakan lakukan pendaftaran terlebih dahulu."
+              } else {
+                errorMsg = "Kata sandi yang Anda masukkan salah. Silakan periksa kembali."
+              }
+            } catch {
+              errorMsg = "Akun belum terdaftar atau kata sandi tidak cocok. Silakan periksa kembali."
+            }
           } else if (error.message.includes("Email not confirmed")) {
             errorMsg = "Email belum dikonfirmasi. Harap periksa kotak masuk atau spam email Anda dan klik tautan konfirmasi untuk verifikasi."
           }
@@ -367,11 +401,7 @@ export default function LoginPage() {
         }
 
         if (data?.user) {
-          const name = data.user.user_metadata?.full_name || loginEmail.split("@")[0]
-          const isVerified = Boolean(data.user.email_confirmed_at)
-          localStorage.setItem("sp_current_user_name", name)
-          localStorage.setItem("sp_current_user_email", data.user.email || loginEmail)
-          localStorage.setItem("sp_current_user_verified", isVerified ? "true" : "false")
+          const isConfirmed = Boolean(data.user.email_confirmed_at)
 
           // Ambil role & status dari profiles
           try {
@@ -381,11 +411,34 @@ export default function LoginPage() {
               .eq("id", data.user.id)
               .maybeSingle()
 
+            let totalProfilesCount = 1
+            try {
+              const { count } = await supabase.from("profiles").select("id", { count: "exact", head: true })
+              totalProfilesCount = count ?? 0
+            } catch {}
+
+            // Jika baris di profiles tidak ditemukan dan sistem sudah memiliki akun lain:
+            // Berarti akun ini telah dihapus oleh pengelola! Batalkan sesi dan cegah masuk.
+            if (!profile && totalProfilesCount > 0) {
+              await supabase.auth.signOut()
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("sp_current_user_name")
+                localStorage.removeItem("sp_current_user_email")
+                localStorage.removeItem("sp_current_user_role")
+                localStorage.removeItem("sp_current_user_status")
+                localStorage.removeItem("sp_current_user_verified")
+                localStorage.removeItem("sp_remember_me")
+              }
+              setAuthError("Akun belum terdaftar. Silakan lakukan pendaftaran terlebih dahulu.")
+              setIsLoading(false)
+              return
+            }
+
+            const name = data.user.user_metadata?.full_name || profile?.full_name || trimmedEmail.split("@")[0]
+            const verified = Boolean(profile?.is_verified || isConfirmed)
+
             if (profile) {
               const role = profile.role || "perawat"
-              const isConfirmed = Boolean(data.user.email_confirmed_at)
-              const verified = Boolean(profile.is_verified || isConfirmed)
-              
               // Jika email belum diverifikasi dan bukan pengelola, status tidak boleh aktif
               const status = (!verified && role !== "pengelola")
                 ? "pending"
@@ -395,30 +448,24 @@ export default function LoginPage() {
                 await supabase.from("profiles").update({ is_verified: true }).eq("id", data.user.id)
               }
 
+              localStorage.setItem("sp_current_user_name", profile.full_name || name)
+              localStorage.setItem("sp_current_user_email", data.user.email || trimmedEmail)
               localStorage.setItem("sp_current_user_role", role)
               localStorage.setItem("sp_current_user_status", status)
               localStorage.setItem("sp_current_user_verified", verified ? "true" : "false")
-              if (profile.full_name) localStorage.setItem("sp_current_user_name", profile.full_name)
             } else {
-              // Jika baris di profiles belum ada
-              let role = "perawat"
-              try {
-                const { count } = await supabase.from("profiles").select("id", { count: "exact", head: true })
-                if (!count || count === 0) role = "pengelola"
-              } catch {}
-
-              const isConfirmed = Boolean(data.user.email_confirmed_at)
-              const status = role === "pengelola" ? "aktif" : (isConfirmed ? "aktif" : "pending")
-              const verified = isConfirmed
+              // Kasus inisialisasi akun super admin pertama jika database kosong sama sekali (count == 0)
+              const role = "pengelola"
+              const status = "aktif"
 
               try {
                 await supabase.from("profiles").upsert({
                   id: data.user.id,
                   full_name: name,
-                  email: loginEmail,
+                  email: trimmedEmail,
                   role,
                   status,
-                  is_verified: verified,
+                  is_verified: true,
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 })
@@ -426,30 +473,11 @@ export default function LoginPage() {
                 console.warn("Re-create profile notice:", recreateErr)
               }
 
-              // Simpan juga ke cache perawat lokal agar langsung terdeteksi
-              try {
-                const cached = getLocalNurses()
-                const existingIdx = cached.findIndex((n) => n.email.toLowerCase() === loginEmail.toLowerCase())
-                const nurseItem: NurseAccount = {
-                  id: data.user.id,
-                  fullName: name,
-                  email: loginEmail,
-                  role: role as NurseRole,
-                  status: status as NurseStatus,
-                  isVerified: verified,
-                  createdAt: new Date().toISOString(),
-                }
-                if (existingIdx >= 0) {
-                  cached[existingIdx] = nurseItem
-                } else {
-                  cached.unshift(nurseItem)
-                }
-                saveLocalNurses(cached)
-              } catch {}
-
+              localStorage.setItem("sp_current_user_name", name)
+              localStorage.setItem("sp_current_user_email", data.user.email || trimmedEmail)
               localStorage.setItem("sp_current_user_role", role)
               localStorage.setItem("sp_current_user_status", status)
-              localStorage.setItem("sp_current_user_verified", verified ? "true" : "false")
+              localStorage.setItem("sp_current_user_verified", "true")
             }
           } catch {
             const cachedRole = localStorage.getItem("sp_current_user_role") || "perawat"
@@ -458,11 +486,19 @@ export default function LoginPage() {
           }
         }
       } else {
-        const cachedRole = localStorage.getItem("sp_current_user_role") || "perawat"
-        localStorage.setItem("sp_current_user_email", loginEmail)
-        localStorage.setItem("sp_current_user_role", cachedRole)
-        localStorage.setItem("sp_current_user_status", "aktif")
-        localStorage.setItem("sp_current_user_verified", "true")
+        const trimmedEmail = loginEmail.trim()
+        const currentNurses = getLocalNurses()
+        const found = currentNurses.find((n) => n.email.toLowerCase() === trimmedEmail.toLowerCase())
+        if (!found) {
+          setAuthError("Akun belum terdaftar. Silakan lakukan pendaftaran terlebih dahulu.")
+          setIsLoading(false)
+          return
+        }
+        localStorage.setItem("sp_current_user_name", found.fullName)
+        localStorage.setItem("sp_current_user_email", trimmedEmail)
+        localStorage.setItem("sp_current_user_role", found.role)
+        localStorage.setItem("sp_current_user_status", found.status)
+        localStorage.setItem("sp_current_user_verified", found.isVerified ? "true" : "false")
       }
 
       setIsLoading(false)

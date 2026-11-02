@@ -106,11 +106,31 @@ export function NavUser({ user }: NavUserProps) {
             "Staf Medis"
           const email = authUser.email || ""
 
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("is_verified, role")
-            .eq("id", authUser.id)
-            .maybeSingle()
+          let query = supabase.from("profiles").select("id, is_verified, role")
+          if (email) {
+            query = query.or(`id.eq.${authUser.id},email.ilike.${email}`)
+          } else {
+            query = query.eq("id", authUser.id)
+          }
+
+          const { data: profile, error } = await query.maybeSingle()
+
+          if (!error && !profile) {
+            // Akun telah dihapus oleh pengelola dari database
+            try {
+              await supabase.auth.signOut()
+            } catch {}
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("sp_current_user_name")
+              localStorage.removeItem("sp_current_user_email")
+              localStorage.removeItem("sp_current_user_role")
+              localStorage.removeItem("sp_current_user_status")
+              localStorage.removeItem("sp_current_user_verified")
+              localStorage.removeItem("sp_remember_me")
+            }
+            router.replace("/login")
+            return
+          }
 
           const verified =
             profile?.role === "pengelola" ||
@@ -131,7 +151,7 @@ export function NavUser({ user }: NavUserProps) {
     }
 
     loadUser()
-  }, [])
+  }, [router])
 
   // Kirim Link Verifikasi Email via Supabase
   const handleSendVerificationEmail = async () => {
