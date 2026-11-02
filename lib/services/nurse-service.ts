@@ -57,12 +57,11 @@ export async function fetchNurseAccounts(): Promise<{
     }
 
     if (data) {
-      // Seluruh akun yang sudah terdaftar di sistem ditandai terverifikasi (true)
       const mapped: NurseAccount[] = (data as ProfileRow[]).map((p) => {
         const isPengelola = p.role === "pengelola"
 
-        // Semua akun terdaftar otomatis terverifikasi
-        const isVerified = true
+        // Pengelola selalu terverifikasi; perawat biasa murni mengikuti status is_verified dari database
+        const isVerified = isPengelola ? true : Boolean(p.is_verified)
         const status = (p.status as NurseStatus) || (isPengelola ? "aktif" : "pending")
 
         return {
@@ -75,18 +74,6 @@ export async function fetchNurseAccounts(): Promise<{
           createdAt: p.created_at,
         }
       })
-
-      // Sinkronkan ke database Supabase agar permanen menjadi true
-      const unverifiedIds = (data as ProfileRow[])
-        .filter((p) => p.is_verified !== true)
-        .map((p) => p.id)
-
-      if (unverifiedIds.length > 0) {
-        void supabase
-          .from("profiles")
-          .update({ is_verified: true, updated_at: new Date().toISOString() })
-          .in("id", unverifiedIds)
-      }
 
       saveLocalNurses(mapped)
       return { data: mapped, isDbConnected: true }
@@ -380,7 +367,7 @@ export function getLocalNurses(): NurseAccount[] {
       if (Array.isArray(parsed)) {
         return parsed.map((n) => ({
           ...n,
-          isVerified: true,
+          isVerified: Boolean(n.isVerified),
         }))
       }
     }

@@ -76,13 +76,13 @@ export function NavUser({ user }: NavUserProps) {
     try {
       const cachedName = localStorage.getItem("sp_current_user_name")
       const cachedEmail = localStorage.getItem("sp_current_user_email")
-      const cachedVerified = localStorage.getItem("sp_current_user_verified") === "true"
+      const cachedVerified = localStorage.getItem("sp_current_user_verified")
 
-      if (cachedName || cachedEmail || cachedVerified) {
+      if (cachedName || cachedEmail || cachedVerified !== null) {
         queueMicrotask(() => {
           if (cachedName) setUserName(cachedName)
           if (cachedEmail) setUserEmail(cachedEmail)
-          if (cachedVerified) setIsVerified(true)
+          if (cachedVerified !== null) setIsVerified(cachedVerified === "true")
         })
       }
     } catch {
@@ -105,7 +105,17 @@ export function NavUser({ user }: NavUserProps) {
             authUser.email?.split("@")[0] ||
             "Staf Medis"
           const email = authUser.email || ""
-          const verified = Boolean(authUser.email_confirmed_at)
+
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("is_verified, role")
+            .eq("id", authUser.id)
+            .maybeSingle()
+
+          const verified =
+            profile?.role === "pengelola" ||
+            Boolean(authUser.email_confirmed_at) ||
+            Boolean(profile?.is_verified)
 
           setUserName(name)
           setUserEmail(email)

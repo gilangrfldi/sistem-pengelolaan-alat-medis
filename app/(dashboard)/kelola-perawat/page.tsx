@@ -125,7 +125,7 @@ export default function KelolaPerawatPage() {
 
     // Validasi aturan: Akses hanya bisa diaktifkan jika email perawat sudah diverifikasi
     if (!nurse.isVerified) {
-      alert("Akses tidak dapat diaktifkan. Perawat harus memverifikasi email terlebih dahulu.")
+      toast.error("Akses tidak dapat diaktifkan. Perawat harus memverifikasi email terlebih dahulu.")
       return
     }
 
