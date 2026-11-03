@@ -18,7 +18,7 @@ export function DashboardAccessGuard({ children }: DashboardAccessGuardProps) {
   const pathname = usePathname()
   const [isChecking, setIsChecking] = useState(true)
   const [userRole, setUserRole] = useState<NurseRole>("perawat")
-  const [userStatus, setUserStatus] = useState<NurseStatus>("aktif")
+  const [userStatus, setUserStatus] = useState<NurseStatus>("pending")
   const [userName, setUserName] = useState<string>("Staf Medis")
   const [userEmail, setUserEmail] = useState<string>("")
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -36,7 +36,7 @@ export function DashboardAccessGuard({ children }: DashboardAccessGuardProps) {
       const cachedEmail = typeof window !== "undefined" ? localStorage.getItem("sp_current_user_email") || "" : ""
       const cachedName = typeof window !== "undefined" ? localStorage.getItem("sp_current_user_name") || "Staf Medis" : "Staf Medis"
       const cachedRole = (typeof window !== "undefined" ? localStorage.getItem("sp_current_user_role") : null) as NurseRole || "perawat"
-      const cachedStatus = (typeof window !== "undefined" ? localStorage.getItem("sp_current_user_status") : null) as NurseStatus || "aktif"
+      const cachedStatus = (typeof window !== "undefined" ? localStorage.getItem("sp_current_user_status") : null) as NurseStatus || "pending"
 
       setUserName(cachedName)
       setUserEmail(cachedEmail)
@@ -52,18 +52,26 @@ export function DashboardAccessGuard({ children }: DashboardAccessGuardProps) {
           return
         }
 
-        let query = supabase.from("profiles").select("id, role, status, full_name, is_verified")
-        if (authUser?.id && emailToCheck) {
-          query = query.or(`id.eq.${authUser.id},email.ilike.${emailToCheck}`)
-        } else if (authUser?.id) {
-          query = query.eq("id", authUser.id)
-        } else {
-          query = query.ilike("email", emailToCheck)
+        let profile = null
+        if (authUser?.id) {
+          const { data } = await supabase
+            .from("profiles")
+            .select("id, role, status, full_name, is_verified")
+            .eq("id", authUser.id)
+            .maybeSingle()
+          profile = data
         }
 
-        const { data: profile, error } = await query.maybeSingle()
+        if (!profile && emailToCheck) {
+          const { data } = await supabase
+            .from("profiles")
+            .select("id, role, status, full_name, is_verified")
+            .eq("email", emailToCheck.toLowerCase())
+            .maybeSingle()
+          profile = data
+        }
 
-        if (!error && !profile) {
+        if (!profile) {
           // Akun sudah dihapus oleh pengelola
           await clearSessionAndRedirectToLogin()
           return
@@ -106,7 +114,7 @@ export function DashboardAccessGuard({ children }: DashboardAccessGuardProps) {
         const cachedEmail = typeof window !== "undefined" ? localStorage.getItem("sp_current_user_email") || "" : ""
         const cachedName = typeof window !== "undefined" ? localStorage.getItem("sp_current_user_name") || "Staf Medis" : "Staf Medis"
         const cachedRole = (typeof window !== "undefined" ? localStorage.getItem("sp_current_user_role") : null) as NurseRole || "perawat"
-        const cachedStatus = (typeof window !== "undefined" ? localStorage.getItem("sp_current_user_status") : null) as NurseStatus || "aktif"
+        const cachedStatus = (typeof window !== "undefined" ? localStorage.getItem("sp_current_user_status") : null) as NurseStatus || "pending"
 
         if (supabaseUrl && !supabaseUrl.includes("your-project-ref")) {
           // 1. Ambil data sesi Supabase Auth
@@ -121,22 +129,29 @@ export function DashboardAccessGuard({ children }: DashboardAccessGuardProps) {
             return
           }
 
-          // 2. Periksa apakah profil masih ada di tabel profiles
-          let query = supabase.from("profiles").select("id, role, status, full_name, is_verified")
-          if (authUser?.id && emailToCheck) {
-            query = query.or(`id.eq.${authUser.id},email.ilike.${emailToCheck}`)
-          } else if (authUser?.id) {
-            query = query.eq("id", authUser.id)
-          } else {
-            query = query.ilike("email", emailToCheck)
+          // 2. Periksa apakah profil masih ada di tabel profiles secara terisolasi tanpa filter .or()
+          let profile = null
+          if (authUser?.id) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id, role, status, full_name, is_verified")
+              .eq("id", authUser.id)
+              .maybeSingle()
+            profile = data
           }
 
-          const { data: profile, error } = await query.maybeSingle()
+          if (!profile && emailToCheck) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id, role, status, full_name, is_verified")
+              .eq("email", emailToCheck.toLowerCase())
+              .maybeSingle()
+            profile = data
+          }
 
           if (!ignore) {
-            // Jika database aktif dan baris profil tidak ditemukan:
-            // Akun telah dihapus oleh pengelola, maka otomatis keluarkan secara kilat!
-            if (!error && !profile) {
+            // Jika baris profil tidak ditemukan (akun dihapus pengelola), alihkan seketika
+            if (!profile) {
               await clearSessionAndRedirectToLogin()
               return
             }
@@ -227,6 +242,29 @@ export function DashboardAccessGuard({ children }: DashboardAccessGuardProps) {
   // Menu Pengaturan Akun selalu dapat diakses oleh akun mana pun (termasuk yang belum aktif)
   if (pathname === "/pengaturan-akun") {
     return <>{children}</>
+  }
+
+  // Proteksi hak akses: Menu Kelola Perawat hanya dapat diakses oleh Pengelola HCU
+  if (!isChecking && pathname.startsWith("/kelola-perawat") && userRole !== "pengelola") {
+    return (
+      <div className="flex flex-1 items-center justify-center p-4 min-h-[70vh]">
+        <div className="flex flex-col items-center max-w-md w-full text-center p-6 rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm">
+          <div className="size-14 rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center justify-center mb-3">
+            <ShieldAlert className="size-7" />
+          </div>
+          <h2 className="text-lg font-bold text-foreground">Akses Ditolak</h2>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+            Halaman Kelola Staf Perawat hanya dapat diakses oleh Kepala Ruangan atau Pengelola Utama HCU.
+          </p>
+          <Link
+            href="/beranda"
+            className="mt-5 px-5 py-2.5 rounded-xl bg-[#512da8] text-white text-xs font-bold hover:bg-[#432588] transition shadow-xs"
+          >
+            Kembali ke Beranda
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   const isAccessAllowed = userRole === "pengelola" || userStatus === "aktif"

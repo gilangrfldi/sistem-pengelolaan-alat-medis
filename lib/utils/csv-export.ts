@@ -84,10 +84,15 @@ export function exportToCsv({
 }) {
   if (typeof window === "undefined") return
 
-  // Format cell CSV dengan sanitasi tanda kutip dan koma
+  // Format cell CSV dengan sanitasi formula injection, tanda kutip, dan koma
   const formatCell = (val: string | number | null | undefined): string => {
     if (val === null || val === undefined) return '""'
-    const str = String(val).replace(/"/g, '""')
+    let str = String(val)
+    // Cegah CSV Formula Injection jika sel diawali karakter kendali spreadsheet
+    if (/^[=+\-@\t\r]/.test(str)) {
+      str = `'${str}`
+    }
+    str = str.replace(/"/g, '""')
     return `"${str}"`
   }
 

@@ -49,14 +49,11 @@ export default function ResetPasswordPage() {
         }
       }
 
-      // Simpan kata sandi baru ke storage agar otomatis terisi saat dialihkan ke login
+      // Tandai pembaruan kata sandi berhasil
       try {
-        localStorage.setItem("sp_just_reset_password", newPassword)
         localStorage.setItem("sp_reset_success", "true")
-        // Jika sebelumnya user mencentang ingat saya, perbarui juga
-        if (localStorage.getItem("sp_remember_me") === "true") {
-          localStorage.setItem("sp_saved_password", newPassword)
-        }
+        localStorage.removeItem("sp_saved_password")
+        localStorage.removeItem("sp_just_reset_password")
       } catch {
         // Abaikan jika storage dibatasi
       }
@@ -70,8 +67,9 @@ export default function ResetPasswordPage() {
       }, 1200)
     } catch {
       try {
-        localStorage.setItem("sp_just_reset_password", newPassword)
         localStorage.setItem("sp_reset_success", "true")
+        localStorage.removeItem("sp_saved_password")
+        localStorage.removeItem("sp_just_reset_password")
       } catch {
         // Abaikan
       }

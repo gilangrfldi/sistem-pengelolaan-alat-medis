@@ -6,7 +6,7 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
-  // Pastikan URL dan key Supabase tersedia sebelum memanggil client
+  // Pastikan konfigurasi URL dan key Supabase tersedia
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
     !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
@@ -37,8 +37,40 @@ export async function updateSession(request: NextRequest) {
   )
 
   // Merefresh sesi pengguna secara otomatis
-  await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const pathname = request.nextUrl.pathname
+  const isDashboardRoute =
+    pathname.startsWith("/beranda") ||
+    pathname.startsWith("/kelola-pasien") ||
+    pathname.startsWith("/kelola-alat") ||
+    pathname.startsWith("/kelola-perawat") ||
+    pathname.startsWith("/rekap") ||
+    pathname.startsWith("/pengaturan-akun")
+
+  // 1. Alihkan pengguna tanpa sesi aktif saat mengakses area dashboard
+  if (!user && isDashboardRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/masuk"
+    return NextResponse.redirect(url)
+  }
+
+  // 2. Proteksi rute khusus pengelola
+  if (user && pathname.startsWith("/kelola-perawat")) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if (profile && profile.role !== "pengelola") {
+      const url = request.nextUrl.clone()
+      url.pathname = "/beranda"
+      return NextResponse.redirect(url)
+    }
+  }
 
   return supabaseResponse
 }
-

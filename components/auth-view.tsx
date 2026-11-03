@@ -112,6 +112,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [lockoutSeconds, setLockoutSeconds] = useState(0)
 
   // Modal Lupa Kata Sandi
   const [showForgotModal, setShowForgotModal] = useState(false)
@@ -119,6 +120,17 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
   const [isSendingReset, setIsSendingReset] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
   const [resetEmailSent, setResetEmailSent] = useState(false)
+
+  // Modal Akun Google Sudah Terdaftar
+  const [showAlreadyRegisteredModal, setShowAlreadyRegisteredModal] = useState(false)
+  const [registeredGoogleEmail, setRegisteredGoogleEmail] = useState("")
+  const [existingAccountProfile, setExistingAccountProfile] = useState<{
+    id?: string
+    role?: string
+    status?: string
+    full_name?: string
+    is_verified?: boolean
+  } | null>(null)
 
   // Ref penahan duplikasi eksekusi OAuth
   const isHandlingAuthRef = useRef(false)
@@ -162,24 +174,47 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
     }
   }
 
-  // 2. Baca kredensial tersimpan (Ingat Saya) pasca-hidrasi
+  // 2. Proteksi brute force login & baca kredensial tersimpan pasca-hidrasi
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
+        const lockoutUntil = parseInt(sessionStorage.getItem("sp_login_lockout_until") || "0", 10)
+        const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000)
+        if (remaining > 0) {
+          setLockoutSeconds(remaining)
+        }
+
         const isRemembered = localStorage.getItem("sp_remember_me") === "true"
         if (isRemembered) {
           setRememberMe(true)
           const savedEmail = localStorage.getItem("sp_saved_email")
-          const savedPassword = localStorage.getItem("sp_saved_password")
           if (savedEmail) setLoginEmail(savedEmail)
-          if (savedPassword) setLoginPassword(savedPassword)
         }
-      } catch {
-        // Abaikan jika localStorage tidak didukung
-      }
+        // Bersihkan token kata sandi lama dari localStorage untuk keamanan pre-launch
+        localStorage.removeItem("sp_saved_password")
+        localStorage.removeItem("sp_just_reset_password")
+      } catch {}
     }, 0)
     return () => clearTimeout(timer)
   }, [])
+
+  // Timer countdown penangguhan brute force
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return
+    const timer = setInterval(() => {
+      setLockoutSeconds((prev) => {
+        if (prev <= 1) {
+          try {
+            sessionStorage.removeItem("sp_login_lockout_until")
+            sessionStorage.removeItem("sp_login_failed_attempts")
+          } catch {}
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [lockoutSeconds])
 
   // 3. Baca pesan logout / error query parameter pasca-hidrasi
   useEffect(() => {
@@ -246,12 +281,22 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
           window.history.replaceState({}, document.title, window.location.pathname)
         }
 
-        // Cek baris profil pengguna di tabel profiles
-        const { data: profile } = await supabase
+        // Cek baris profil pengguna di tabel profiles secara terisolasi tanpa filter gabungan .or()
+        let { data: profile } = await supabase
           .from("profiles")
           .select("id, role, status, full_name, is_verified, created_at")
-          .or(`id.eq.${session.user.id},email.ilike.${userEmail}`)
+          .eq("id", session.user.id)
           .maybeSingle()
+
+        if (!profile && userEmail) {
+          const cleanEmail = userEmail.trim().toLowerCase()
+          const { data: profileByEmail } = await supabase
+            .from("profiles")
+            .select("id, role, status, full_name, is_verified, created_at")
+            .eq("email", cleanEmail)
+            .maybeSingle()
+          profile = profileByEmail
+        }
 
         // Hitung total profil di database untuk deteksi akun pertama
         let totalCount = 1
@@ -271,6 +316,21 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
           setIsGoogleLoading(false)
           isHandlingAuthRef.current = false
           setAuthError("Akun belum terdaftar. Silakan lakukan pendaftaran terlebih dahulu.")
+          return
+        }
+
+        // KASUS B: PENGGUNA MEMILIH "DAFTAR DENGAN GOOGLE" TETAPI AKUN SUDAH TERDAFTAR DI DATABASE
+        if (isGoogleSignUp && profile && totalCount > 0) {
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("sp_oauth_pending")
+            localStorage.removeItem("sp_oauth_intent")
+          }
+          setIsLoading(false)
+          setIsGoogleLoading(false)
+          isHandlingAuthRef.current = false
+          setExistingAccountProfile(profile)
+          setRegisteredGoogleEmail(userEmail)
+          setShowAlreadyRegisteredModal(true)
           return
         }
 
@@ -379,9 +439,43 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
     }
   }, [router])
 
+  // Lanjutkan masuk menggunakan data profil yang sudah terdaftar tanpa mereset status/role
+  const handleContinueAsExistingUser = () => {
+    setShowAlreadyRegisteredModal(false)
+    if (existingAccountProfile) {
+      const name =
+        existingAccountProfile.full_name ||
+        registeredGoogleEmail.split("@")[0]
+      const role = (existingAccountProfile.role as NurseRole) || "perawat"
+      const status = (existingAccountProfile.status as NurseStatus) || "pending"
+
+      localStorage.setItem("sp_current_user_name", name)
+      localStorage.setItem("sp_current_user_email", registeredGoogleEmail)
+      localStorage.setItem("sp_current_user_role", role)
+      localStorage.setItem("sp_current_user_status", status)
+      localStorage.setItem("sp_current_user_verified", "true")
+    }
+    router.replace("/beranda")
+  }
+
+  // Alihkan ke form masuk jika pengguna ingin memilih akun lain
+  const handleSwitchToLoginFromModal = async () => {
+    setShowAlreadyRegisteredModal(false)
+    const supabase = createClient()
+    await supabase.auth.signOut({ scope: "local" }).catch(() => {})
+    toggleToSignIn()
+    if (registeredGoogleEmail) setLoginEmail(registeredGoogleEmail)
+  }
+
   // 5. Submit Form Masuk (Email & Password)
   const handleSignIn = async (e: FormEvent) => {
     e.preventDefault()
+
+    if (lockoutSeconds > 0) {
+      setAuthError(`Terlalu banyak percobaan masuk yang salah. Harap tunggu ${lockoutSeconds} detik demi keamanan.`)
+      return
+    }
+
     setIsLoading(true)
     setAuthError(null)
     setSuccessMessage(null)
@@ -390,13 +484,27 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
       if (rememberMe) {
         localStorage.setItem("sp_remember_me", "true")
         localStorage.setItem("sp_saved_email", loginEmail)
-        localStorage.setItem("sp_saved_password", loginPassword)
       } else {
         localStorage.removeItem("sp_remember_me")
         localStorage.removeItem("sp_saved_email")
-        localStorage.removeItem("sp_saved_password")
       }
+      localStorage.removeItem("sp_saved_password")
+      localStorage.removeItem("sp_just_reset_password")
     } catch {}
+
+    const recordFailedAttempt = () => {
+      try {
+        const attempts = parseInt(sessionStorage.getItem("sp_login_failed_attempts") || "0", 10) + 1
+        sessionStorage.setItem("sp_login_failed_attempts", String(attempts))
+        if (attempts >= 5) {
+          const lockoutUntil = Date.now() + 60000
+          sessionStorage.setItem("sp_login_lockout_until", String(lockoutUntil))
+          setLockoutSeconds(60)
+          return true
+        }
+      } catch {}
+      return false
+    }
 
     try {
       const supabase = createClient()
@@ -410,8 +518,11 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
         })
 
         if (error) {
+          const isLocked = recordFailedAttempt()
           let errorMsg = error.message
-          if (error.message === "Invalid login credentials") {
+          if (isLocked) {
+            errorMsg = "Terlalu banyak percobaan masuk yang salah. Akses ditangguhkan selama 60 detik demi keamanan."
+          } else if (error.message === "Invalid login credentials") {
             try {
               const { data: existingUser } = await supabase
                 .from("profiles")
@@ -436,6 +547,12 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
         }
 
         if (data?.user) {
+          // Bersihkan riwayat percobaan login gagal jika berhasil masuk
+          try {
+            sessionStorage.removeItem("sp_login_failed_attempts")
+            sessionStorage.removeItem("sp_login_lockout_until")
+          } catch {}
+
           const isConfirmed = Boolean(data.user.email_confirmed_at)
 
           const { data: profile } = await supabase
@@ -911,6 +1028,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
               placeholder="Email terdaftar"
               value={loginEmail}
               onChange={(e) => setLoginEmail(e.target.value)}
+              autoComplete="email"
               required
               className="w-full bg-[#eeeeee] dark:bg-neutral-800 border-0 rounded-lg text-xs sm:text-sm px-4 py-3 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 text-neutral-800 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-[#512da8]/30 transition"
             />
@@ -922,6 +1040,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
                 placeholder="Kata Sandi"
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
+                autoComplete="current-password"
                 required
                 className="w-full bg-[#eeeeee] dark:bg-neutral-800 border-0 rounded-lg text-xs sm:text-sm pl-4 pr-10 py-3 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 text-neutral-800 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-[#512da8]/30 transition"
               />
@@ -963,10 +1082,14 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || lockoutSeconds > 0}
                 className="bg-[#512da8] hover:bg-[#43238c] text-white font-bold text-xs uppercase tracking-wider rounded-lg px-12 py-3 shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-70 cursor-pointer w-full"
               >
-                {isLoading && !isGoogleLoading ? "MEMPROSES..." : "MASUK"}
+                {lockoutSeconds > 0
+                  ? `TUNGGU ${lockoutSeconds} DETIK`
+                  : isLoading && !isGoogleLoading
+                  ? "MEMPROSES..."
+                  : "MASUK"}
               </button>
             </div>
 
@@ -1054,6 +1177,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
               placeholder="Nama lengkap perawat"
               value={regName}
               onChange={(e) => setRegName(e.target.value)}
+              autoComplete="name"
               required
               className="w-full bg-[#eeeeee] dark:bg-neutral-800 border-0 rounded-lg text-xs sm:text-sm px-4 py-3 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 text-neutral-800 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-[#512da8]/30 transition"
             />
@@ -1062,6 +1186,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
               placeholder="Email dinas atau pribadi"
               value={regEmail}
               onChange={(e) => setRegEmail(e.target.value)}
+              autoComplete="email"
               required
               className="w-full bg-[#eeeeee] dark:bg-neutral-800 border-0 rounded-lg text-xs sm:text-sm px-4 py-3 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 text-neutral-800 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-[#512da8]/30 transition"
             />
@@ -1073,6 +1198,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
                 placeholder="Kata sandi (minimal 6 karakter)"
                 value={regPassword}
                 onChange={(e) => setRegPassword(e.target.value)}
+                autoComplete="new-password"
                 required
                 minLength={6}
                 className="w-full bg-[#eeeeee] dark:bg-neutral-800 border-0 rounded-lg text-xs sm:text-sm pl-4 pr-10 py-3 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 text-neutral-800 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-[#512da8]/30 transition"
@@ -1315,6 +1441,50 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Modal Akun Google Sudah Terdaftar */}
+      {showAlreadyRegisteredModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 sm:p-7 shadow-2xl dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 text-center animate-in zoom-in-95 duration-200">
+            <button
+              type="button"
+              onClick={handleSwitchToLoginFromModal}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 p-1 rounded-lg cursor-pointer transition"
+            >
+              <X className="size-5" />
+            </button>
+
+            <div className="flex size-14 items-center justify-center rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 mx-auto mb-3.5 border border-amber-200 dark:border-amber-800">
+              <AlertCircle className="size-7" />
+            </div>
+
+            <h3 className="font-bold text-base sm:text-lg text-neutral-800 dark:text-neutral-100 mb-2">
+              Akun Sudah Terdaftar
+            </h3>
+
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed mb-6">
+              Akun Google <strong className="text-neutral-800 dark:text-neutral-100">{registeredGoogleEmail}</strong> sudah terdaftar di sistem. Anda tidak perlu mendaftar ulang.
+            </p>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleContinueAsExistingUser}
+                className="w-full bg-[#512da8] hover:bg-[#43238c] text-white py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer shadow-md"
+              >
+                Lanjutkan Masuk ke Sistem
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSwitchToLoginFromModal}
+                className="w-full bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 py-2.5 px-4 rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                Gunakan Akun Lain / Ke Halaman Masuk
+              </button>
+            </div>
           </div>
         </div>
       )}

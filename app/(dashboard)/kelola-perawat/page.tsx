@@ -82,6 +82,12 @@ export default function KelolaPerawatPage() {
 
   useEffect(() => {
     let ignore = false
+    const role = typeof window !== "undefined" ? localStorage.getItem("sp_current_user_role") : null
+    if (role && role !== "pengelola") {
+      router.replace("/beranda")
+      return
+    }
+
     const load = async () => {
       setIsLoading(true)
       try {
@@ -97,7 +103,7 @@ export default function KelolaPerawatPage() {
     return () => {
       ignore = true
     }
-  }, [])
+  }, [router])
 
   // Hitung Statistik
   const stats = useMemo(() => {

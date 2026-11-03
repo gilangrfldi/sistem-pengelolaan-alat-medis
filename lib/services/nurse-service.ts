@@ -197,25 +197,21 @@ export async function deleteNurseAccountInDb(id: string, email?: string): Promis
       console.warn("RPC delete_user_account notice:", rpcError.message)
     }
 
-    // 2. Hapus langsung dari tabel profiles baik via ID maupun Email
-    let delQuery = supabase.from("profiles").delete()
-    if (email) {
-      delQuery = delQuery.or(`id.eq.${id},email.ilike.${email.trim()}`)
-    } else {
-      delQuery = delQuery.eq("id", id)
-    }
-    const { error: delError } = await delQuery
+    // 2. Hapus langsung dari tabel profiles secara terisolasi tanpa filter .or()
+    const { error: delError } = await supabase.from("profiles").delete().eq("id", id)
     if (delError) {
       console.warn("Profiles delete notice:", delError.message)
+    }
+    if (email) {
+      await supabase.from("profiles").delete().eq("email", email.trim().toLowerCase())
     }
   } catch (err) {
     console.warn("Offline delete nurse account:", err)
     try {
       const supabase = getSupabase()
+      await supabase.from("profiles").delete().eq("id", id)
       if (email) {
-        await supabase.from("profiles").delete().or(`id.eq.${id},email.ilike.${email.trim()}`)
-      } else {
-        await supabase.from("profiles").delete().eq("id", id)
+        await supabase.from("profiles").delete().eq("email", email.trim().toLowerCase())
       }
     } catch {}
   }

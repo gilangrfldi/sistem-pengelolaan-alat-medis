@@ -71,11 +71,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       return () => window.removeEventListener("storage", onStoreChange)
     },
     () => {
-      if (typeof window === "undefined") return true
+      if (typeof window === "undefined") return false
       const role = localStorage.getItem("sp_current_user_role")
       return role === "pengelola"
     },
-    () => true
+    () => false
   )
 
   const navItems = React.useMemo(() => {
