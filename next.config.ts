@@ -16,7 +16,12 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/",
-        destination: "/login",
+        destination: "/masuk",
+        permanent: false,
+      },
+      {
+        source: "/login",
+        destination: "/masuk",
         permanent: false,
       },
     ];

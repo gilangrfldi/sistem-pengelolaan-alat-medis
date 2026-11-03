@@ -191,26 +191,42 @@ export async function updateNurseProfileInDb(
 // 4. HAPUS AKUN PERAWAT
 // ------------------------------------------------------------------------------
 
-export async function deleteNurseAccountInDb(id: string): Promise<void> {
+export async function deleteNurseAccountInDb(id: string, email?: string): Promise<void> {
   try {
     const supabase = getSupabase()
     // 1. Coba hapus secara permanen via RPC (menghapus dari profiles dan auth.users)
     const { error: rpcError } = await supabase.rpc("delete_user_account", { target_user_id: id })
     if (rpcError) {
       console.warn("RPC delete_user_account notice:", rpcError.message)
-      // Fallback: hapus langsung dari tabel profiles
-      await supabase.from("profiles").delete().eq("id", id)
+    }
+
+    // 2. Hapus langsung dari tabel profiles baik via ID maupun Email
+    let delQuery = supabase.from("profiles").delete()
+    if (email) {
+      delQuery = delQuery.or(`id.eq.${id},email.ilike.${email.trim()}`)
+    } else {
+      delQuery = delQuery.eq("id", id)
+    }
+    const { error: delError } = await delQuery
+    if (delError) {
+      console.warn("Profiles delete notice:", delError.message)
     }
   } catch (err) {
     console.warn("Offline delete nurse account:", err)
     try {
       const supabase = getSupabase()
-      await supabase.from("profiles").delete().eq("id", id)
+      if (email) {
+        await supabase.from("profiles").delete().or(`id.eq.${id},email.ilike.${email.trim()}`)
+      } else {
+        await supabase.from("profiles").delete().eq("id", id)
+      }
     } catch {}
   }
 
   const current = getLocalNurses()
-  const updated = current.filter((n) => n.id !== id)
+  const updated = current.filter(
+    (n) => n.id !== id && (!email || n.email.toLowerCase() !== email.toLowerCase())
+  )
   saveLocalNurses(updated)
 }
 

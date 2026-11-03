@@ -15,6 +15,7 @@ export interface AppModalProps {
   onSubmit?: (e: React.FormEvent) => void
   submitText?: string
   submitVariant?: "primary" | "danger"
+  isSubmitting?: boolean
   cancelText?: string
   footer?: React.ReactNode
   showFooter?: boolean
@@ -40,6 +41,7 @@ export function AppModal({
   onSubmit,
   submitText = "Simpan",
   submitVariant = "primary",
+  isSubmitting = false,
   cancelText = "Batal",
   footer,
   showFooter = true,
@@ -139,11 +141,12 @@ export function AppModal({
               </button>
               <button
                 type="submit"
+                disabled={isSubmitting}
                 className={cn(
-                  "px-5 py-2 text-xs sm:text-sm font-semibold rounded-lg text-white shadow-sm transition-colors cursor-pointer",
+                  "px-5 py-2 text-xs sm:text-sm font-semibold rounded-lg text-white shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
                   submitVariant === "danger"
-                    ? "bg-rose-600 hover:bg-rose-700"
-                    : "bg-[#512da8] hover:bg-[#43238c]"
+                    ? "bg-rose-600 hover:bg-rose-700 disabled:hover:bg-rose-600"
+                    : "bg-[#512da8] hover:bg-[#43238c] disabled:hover:bg-[#512da8]"
                 )}
               >
                 {submitText}

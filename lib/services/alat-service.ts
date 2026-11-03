@@ -588,3 +588,45 @@ export async function deleteDamagedToolInDb(id: string): Promise<void> {
   const { error } = await supabase.from("alat_rusak").delete().eq("id", id)
   if (error) throw error
 }
+
+// ------------------------------------------------------------------------------
+// PENGHAPUSAN MASSAL REKAP ALAT (HANYA PENGELOLA)
+// ------------------------------------------------------------------------------
+
+export async function deleteAllTimedToolsInDb(): Promise<void> {
+  const supabase = getSupabase()
+  const { error } = await supabase
+    .from("alat_waktu")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000")
+  if (error) console.warn("Supabase deleteAllTimedTools notice:", error.message)
+  if (typeof window !== "undefined") localStorage.removeItem("sp_timed_tools")
+}
+
+export async function deleteAllCountToolsInDb(): Promise<void> {
+  const supabase = getSupabase()
+  const { error } = await supabase
+    .from("alat_kali")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000")
+  if (error) console.warn("Supabase deleteAllCountTools notice:", error.message)
+  if (typeof window !== "undefined") localStorage.removeItem("sp_count_tools")
+}
+
+export async function deleteAllDamagedToolsInDb(): Promise<void> {
+  const supabase = getSupabase()
+  const { error } = await supabase
+    .from("alat_rusak")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000")
+  if (error) console.warn("Supabase deleteAllDamagedTools notice:", error.message)
+  if (typeof window !== "undefined") localStorage.removeItem("sp_damaged_tools")
+}
+
+export async function deleteAllToolRecordsInDb(): Promise<void> {
+  await Promise.all([
+    deleteAllTimedToolsInDb(),
+    deleteAllCountToolsInDb(),
+    deleteAllDamagedToolsInDb(),
+  ])
+}

@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import {
   User,
   Mail,
@@ -21,6 +20,7 @@ import {
   BadgeCheck,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { performLogout } from "@/lib/services/auth-service"
 import {
   updateNurseProfileInDb,
   deleteNurseAccountInDb,
@@ -31,8 +31,6 @@ import { getInitials } from "@/components/nav-user"
 import { toast } from "@/components/ui/app-toast"
 
 export default function PengaturanAkunPage() {
-  const router = useRouter()
-
   // State Profil Pengguna
   const [userId, setUserId] = useState<string>("")
   const [fullName, setFullName] = useState<string>("")
@@ -321,27 +319,9 @@ export default function PengaturanAkunPage() {
         }
       }
 
-      // 2. Sign Out dari Supabase
-      if (supabaseUrl && !supabaseUrl.includes("your-project-ref")) {
-        try {
-          await supabase.auth.signOut()
-        } catch {}
-      }
-
-      // 3. Bersihkan seluruh penyimpanan lokal sesi
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("sp_current_user_name")
-        localStorage.removeItem("sp_current_user_email")
-        localStorage.removeItem("sp_current_user_role")
-        localStorage.removeItem("sp_current_user_status")
-        localStorage.removeItem("sp_current_user_verified")
-        localStorage.removeItem("sp_remember_me")
-      }
-
       setShowDeleteModal(false)
       toast.success("Akun berhasil dihapus")
-      router.push("/login")
-      router.refresh()
+      await performLogout()
     } catch (err) {
       console.error("Gagal menghapus akun:", err)
       setIsDeletingAccount(false)

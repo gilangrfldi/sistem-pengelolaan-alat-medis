@@ -141,6 +141,8 @@ export async function updatePatientInDb(id: string, updates: Partial<Patient>): 
   if (updates.rm !== undefined) payload.rm = updates.rm.trim()
   if (updates.bed !== undefined) payload.bed = updates.bed
   if (updates.careLevel !== undefined) payload.care_level = updates.careLevel
+  if (updates.admissionDate !== undefined) payload.admission_date = updates.admissionDate
+  if (updates.admissionTime !== undefined) payload.admission_time = updates.admissionTime
   if (updates.nurseName !== undefined) payload.nurse_name = updates.nurseName
   if (updates.status !== undefined) payload.status = updates.status
   if (updates.dischargeDate !== undefined) payload.discharge_date = updates.dischargeDate
@@ -160,5 +162,23 @@ export async function deletePatientInDb(id: string): Promise<void> {
   const supabase = getSupabase()
   const { error } = await supabase.from("pasien_hcu").delete().eq("id", id)
   if (error) throw error
+}
+
+// ------------------------------------------------------------------------------
+// 5. HAPUS SELURUH PASIEN DARI SUPABASE (HANYA PENGELOLA)
+// ------------------------------------------------------------------------------
+
+export async function deleteAllPatientsInDb(): Promise<void> {
+  const supabase = getSupabase()
+  const { error } = await supabase
+    .from("pasien_hcu")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000")
+  if (error) {
+    console.warn("Supabase deleteAllPatients notice:", error.message)
+  }
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("sp_patients")
+  }
 }
 

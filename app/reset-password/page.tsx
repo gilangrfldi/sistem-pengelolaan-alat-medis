@@ -66,7 +66,7 @@ export default function ResetPasswordPage() {
 
       // Beri sedikit jeda lalu arahkan otomatis ke login
       setTimeout(() => {
-        router.push("/login")
+        router.push("/masuk")
       }, 1200)
     } catch {
       try {
@@ -78,7 +78,7 @@ export default function ResetPasswordPage() {
       setIsSuccess(true)
       setIsLoading(false)
       setTimeout(() => {
-        router.push("/login")
+        router.push("/masuk")
       }, 1200)
     }
   }
@@ -193,7 +193,7 @@ export default function ResetPasswordPage() {
               <div className="text-center pt-2">
                 <button
                   type="button"
-                  onClick={() => router.push("/login")}
+                  onClick={() => router.push("/masuk")}
                   className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 transition"
                 >
                   <ArrowLeft className="size-3.5" />

@@ -165,6 +165,7 @@ function KelolaPasienContent() {
   const [formBed, setFormBed] = useState("Bed 03")
   const [formCareLevel, setFormCareLevel] = useState<CareLevel>("total")
   const [formAdmissionDateObj, setFormAdmissionDateObj] = useState<Date | undefined>(new Date())
+  const [formAdmissionTime, setFormAdmissionTime] = useState<string>("")
   const [formError, setFormError] = useState<string | null>(null)
 
   // Form State Pulangkan (BLPL)
@@ -351,12 +352,14 @@ function KelolaPasienContent() {
 
   // Buka Modal Tambah Pasien
   const handleOpenAddModal = () => {
+    const now = new Date()
     setFormTitle("Tn.")
     setFormRawName("")
     setFormRm("")
     setFormBed(firstEmptyBed)
     setFormCareLevel("total")
-    setFormAdmissionDateObj(new Date())
+    setFormAdmissionDateObj(now)
+    setFormAdmissionTime(getFormattedTime(now).slice(0, 5))
     setFormError(null)
     setShowAddModal(true)
   }
@@ -392,7 +395,7 @@ function KelolaPasienContent() {
     }
 
     const now = new Date()
-    const timeStr = getFormattedTime(now).slice(0, 5)
+    const timeStr = formAdmissionTime.trim() || getFormattedTime(now).slice(0, 5)
     const dateFormatted = formAdmissionDateObj ? format(formAdmissionDateObj, "dd-MM-yyyy") : todayStr
 
     const fullName = `${formTitle} ${formRawName.trim()}`
@@ -507,6 +510,11 @@ function KelolaPasienContent() {
       setFormAdmissionDateObj(new Date())
     }
 
+    const existingTime = patient.admissionTime
+      ? patient.admissionTime.replace(" WIB", "").trim()
+      : getFormattedTime(new Date()).slice(0, 5)
+    setFormAdmissionTime(existingTime)
+
     setFormError(null)
     setShowEditModal(true)
   }
@@ -539,6 +547,8 @@ function KelolaPasienContent() {
     const fullName = `${formTitle} ${formRawName.trim()}`
     const genderEquiv: "L" | "P" = formTitle === "Ny." ? "P" : "L"
     const dateFormatted = formAdmissionDateObj ? format(formAdmissionDateObj, "dd-MM-yyyy") : selectedPatient.admissionDate
+    const existingTime = selectedPatient.admissionTime ? selectedPatient.admissionTime.replace(" WIB", "").trim() : ""
+    const timeFormatted = formAdmissionTime.trim() || existingTime || getFormattedTime(new Date()).slice(0, 5)
 
     const updated = patients.map((p) =>
       p.id === selectedPatient.id
@@ -550,6 +560,7 @@ function KelolaPasienContent() {
             bed: formBed,
             careLevel: formCareLevel,
             admissionDate: dateFormatted,
+            admissionTime: timeFormatted,
           }
         : p
     )
@@ -562,6 +573,7 @@ function KelolaPasienContent() {
         bed: formBed,
         careLevel: formCareLevel,
         admissionDate: dateFormatted,
+        admissionTime: timeFormatted,
       })
     } catch (err) {
       console.warn("DB offline edit:", err)
@@ -1101,14 +1113,29 @@ function KelolaPasienContent() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-              Tanggal Masuk HCU
-            </label>
-            <DatePicker
-              date={formAdmissionDateObj}
-              onDateChange={setFormAdmissionDateObj}
-              className="w-full justify-start text-xs sm:text-sm"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                Tanggal & Jam Masuk HCU
+              </label>
+              <span className="text-[10px] text-muted-foreground font-mono">WIB</span>
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              <div className="col-span-3">
+                <DatePicker
+                  date={formAdmissionDateObj}
+                  onDateChange={setFormAdmissionDateObj}
+                  className="w-full justify-start text-xs sm:text-sm"
+                />
+              </div>
+              <div className="col-span-2">
+                <input
+                  type="time"
+                  value={formAdmissionTime}
+                  onChange={(e) => setFormAdmissionTime(e.target.value)}
+                  className="w-full h-9 text-xs sm:text-sm border rounded-lg px-2.5 py-1.5 bg-background border-border focus:outline-[#512da8] font-mono text-center"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1355,14 +1382,29 @@ function KelolaPasienContent() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-                  Tanggal Masuk
-                </label>
-                <DatePicker
-                  date={formAdmissionDateObj}
-                  onDateChange={setFormAdmissionDateObj}
-                  className="w-full justify-start text-xs sm:text-sm"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                    Tanggal & Jam Masuk
+                  </label>
+                  <span className="text-[10px] text-muted-foreground font-mono">WIB</span>
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  <div className="col-span-3">
+                    <DatePicker
+                      date={formAdmissionDateObj}
+                      onDateChange={setFormAdmissionDateObj}
+                      className="w-full justify-start text-xs sm:text-sm"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="time"
+                      value={formAdmissionTime}
+                      onChange={(e) => setFormAdmissionTime(e.target.value)}
+                      className="w-full h-9 text-xs sm:text-sm border rounded-lg px-2.5 py-1.5 bg-background border-border focus:outline-[#512da8] font-mono text-center"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

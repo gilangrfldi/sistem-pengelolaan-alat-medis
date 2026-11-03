@@ -138,7 +138,7 @@ const REGULAR_BEDS = Array.from({ length: 19 }, (_, i) => {
 const ISOLATION_BEDS = ["Isolasi 1", "Isolasi 2"]
 const ALL_BEDS = [...REGULAR_BEDS, ...ISOLATION_BEDS]
 
-const INITIAL_PATIENTS_MAP: Record<string, { name: string; rm: string }> = {}
+const INITIAL_PATIENTS_MAP: Record<string, { name: string; rm: string; admissionDate?: string; admissionTime?: string }> = {}
 
 export const INITIAL_MASTER_TOOLS: MasterTool[] = [
   // 1. Alat yang digunakan dalam hitungan waktu (Mesin Ber-Timer & Alat Terpasang Berdurasi)
@@ -302,6 +302,8 @@ interface StoredPatientRecord {
   name: string
   rm: string
   status: string
+  admissionDate?: string
+  admissionTime?: string
 }
 
 // Helper konversi menit ke format 'X jam Y menit'
@@ -343,9 +345,9 @@ export default function KelolaAlatPage() {
   const [damagedTools, setDamagedTools] = useState<DamagedToolRecord[]>(INITIAL_DAMAGED_TOOLS)
 
   // Mapping Pasien Aktif per Bed (Sinkron dengan Menu Kelola Pasien)
-  const [activePatientsMap, setActivePatientsMap] = useState<Record<string, { name: string; rm: string }>>(
-    INITIAL_PATIENTS_MAP
-  )
+  const [activePatientsMap, setActivePatientsMap] = useState<
+    Record<string, { name: string; rm: string; admissionDate?: string; admissionTime?: string }>
+  >(INITIAL_PATIENTS_MAP)
 
   // 1. Sinkronisasi Data Pasien Aktif HCU (Hanya bed dengan pasien aktif yang bisa dipilih)
   useEffect(() => {
@@ -355,11 +357,16 @@ export default function KelolaAlatPage() {
         const res = await fetchPatientsFromDb()
         if (ignore) return
         if (res.isDbConnected) {
-          const map: Record<string, { name: string; rm: string }> = {}
+          const map: Record<string, { name: string; rm: string; admissionDate?: string; admissionTime?: string }> = {}
           res.data
             .filter((p) => p.status === "aktif")
             .forEach((p) => {
-              map[p.bed] = { name: p.name, rm: p.rm }
+              map[p.bed] = {
+                name: p.name,
+                rm: p.rm,
+                admissionDate: p.admissionDate,
+                admissionTime: p.admissionTime,
+              }
             })
           setActivePatientsMap(map)
           localStorage.setItem("sp_hcu_patients", JSON.stringify(res.data))
@@ -372,11 +379,16 @@ export default function KelolaAlatPage() {
         if (saved && !ignore) {
           const list = JSON.parse(saved) as StoredPatientRecord[]
           if (Array.isArray(list)) {
-            const map: Record<string, { name: string; rm: string }> = {}
+            const map: Record<string, { name: string; rm: string; admissionDate?: string; admissionTime?: string }> = {}
             list
               .filter((p) => p.status === "aktif")
               .forEach((p) => {
-                map[p.bed] = { name: p.name, rm: p.rm }
+                map[p.bed] = {
+                  name: p.name,
+                  rm: p.rm,
+                  admissionDate: p.admissionDate,
+                  admissionTime: p.admissionTime,
+                }
               })
             setActivePatientsMap(map)
             return
@@ -490,7 +502,7 @@ export default function KelolaAlatPage() {
   const [formToolName, setFormToolName] = useState("")
   const [formLocations, setFormLocations] = useState<string[]>([])
   const [formUnitNumber, setFormUnitNumber] = useState<number | null>(null)
-  const [formTimeMode, setFormTimeMode] = useState<"now" | "manual">("now")
+  const [formTimeMode, setFormTimeMode] = useState<"now" | "admission" | "manual">("now")
   const [formManualStart, setFormManualStart] = useState("08:00")
   const [formManualEnd, setFormManualEnd] = useState("")
   const [formCountNumber, setFormCountNumber] = useState(1)
@@ -761,7 +773,23 @@ export default function KelolaAlatPage() {
       const prevAccumulated = prevUsed ? prevUsed.accumulatedMinutes : 0
 
       let resolvedStartTimestamp = Date.now()
-      if (formTimeMode === "manual" && formManualStart) {
+      let resolvedStartTimeStr = nowTimeStr
+
+      if (formTimeMode === "admission") {
+        const rawTime = patient.admissionTime ? patient.admissionTime.replace(" WIB", "").trim() : nowTimeStr
+        resolvedStartTimeStr = rawTime
+        if (patient.admissionDate && rawTime) {
+          try {
+            const parts = patient.admissionDate.split("-").map(Number)
+            const [hour, min] = rawTime.split(":").map(Number)
+            if (parts.length === 3 && !isNaN(hour) && !isNaN(min)) {
+              const d = new Date(parts[2], parts[1] - 1, parts[0], hour, min, 0)
+              resolvedStartTimestamp = d.getTime()
+            }
+          } catch {}
+        }
+      } else if (formTimeMode === "manual" && formManualStart) {
+        resolvedStartTimeStr = formManualStart
         const [mh, mm] = formManualStart.split(":").map(Number)
         if (!isNaN(mh) && !isNaN(mm)) {
           const d = new Date()
@@ -781,7 +809,7 @@ export default function KelolaAlatPage() {
         unitNumber: formUnitNumber || undefined,
         locations: resolvedLocations,
         status: isCompleted ? "selesai" : "berjalan",
-        startTimeStr: formTimeMode === "now" ? nowTimeStr : formManualStart,
+        startTimeStr: resolvedStartTimeStr,
         endTimeStr: endStr,
         startedAtTimestamp: resolvedStartTimestamp,
         endedAtTimestamp: isCompleted ? Date.now() : undefined,
@@ -2038,20 +2066,20 @@ export default function KelolaAlatPage() {
                 </div>
               )}
 
-              {/* Pilihan Mode Waktu Mulai: Realtime Sekarang vs Manual */}
+              {/* Pilihan Mode Waktu Mulai: Realtime Sekarang vs Sesuai Jam Masuk vs Manual */}
               <div>
                 <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1">
                   Metode Waktu Mulai:
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setFormTimeMode("now")}
                     className={cn(
-                      "p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer",
+                      "p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer text-center",
                       formTimeMode === "now"
                         ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
-                        : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50"
+                        : "bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50"
                     )}
                   >
                     <Play className="size-3 fill-current" />
@@ -2060,18 +2088,47 @@ export default function KelolaAlatPage() {
 
                   <button
                     type="button"
+                    onClick={() => setFormTimeMode("admission")}
+                    className={cn(
+                      "p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer text-center",
+                      formTimeMode === "admission"
+                        ? "bg-sky-600 text-white border-sky-700 shadow-xs"
+                        : "bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50"
+                    )}
+                  >
+                    <Clock className="size-3" />
+                    <span>
+                      Sesuai Jam Masuk ({activePatientsMap[formBed]?.admissionTime?.replace(" WIB", "") || "Pasien"})
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setFormTimeMode("manual")}
                     className={cn(
-                      "p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer",
+                      "p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer text-center",
                       formTimeMode === "manual"
                         ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                        : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50"
+                        : "bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50"
                     )}
                   >
                     <Clock className="size-3" />
                     <span>Input Rentang Jam Manual</span>
                   </button>
                 </div>
+
+                {formTimeMode === "admission" && (
+                  <div className="p-2.5 rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/20 text-sky-800 dark:text-sky-300 text-xs flex items-center gap-2 mt-2">
+                    <CheckCircle2 className="size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                    <span>
+                      Waktu mulai alat diselaraskan dengan waktu registrasi pasien di bed ini:{" "}
+                      <strong>
+                        {activePatientsMap[formBed]?.admissionDate || "Hari ini"} pukul{" "}
+                        {activePatientsMap[formBed]?.admissionTime || "00:00"} WIB
+                      </strong>
+                    </span>
+                  </div>
+                )}
 
                 {formTimeMode === "manual" && (
                   <div className="grid grid-cols-2 gap-3 mt-2">

@@ -33,6 +33,7 @@ import {
   Send,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { performLogout } from "@/lib/services/auth-service"
 
 // Fungsi Helper: Mengambil inisial nama pertama dan kedua
 // Contoh: "Budi Santoso" -> "BS", "Budi Santoso Putra" -> "BS", "Budi" -> "BU"
@@ -117,18 +118,7 @@ export function NavUser({ user }: NavUserProps) {
 
           if (!error && !profile) {
             // Akun telah dihapus oleh pengelola dari database
-            try {
-              await supabase.auth.signOut()
-            } catch {}
-            if (typeof window !== "undefined") {
-              localStorage.removeItem("sp_current_user_name")
-              localStorage.removeItem("sp_current_user_email")
-              localStorage.removeItem("sp_current_user_role")
-              localStorage.removeItem("sp_current_user_status")
-              localStorage.removeItem("sp_current_user_verified")
-              localStorage.removeItem("sp_remember_me")
-            }
-            router.replace("/login")
+            await performLogout()
             return
           }
 
@@ -199,30 +189,7 @@ export function NavUser({ user }: NavUserProps) {
 
   // Fungsi Keluar (Logout) Akun
   const handleLogout = async () => {
-    try {
-      const supabase = createClient()
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      if (supabaseUrl && !supabaseUrl.includes("your-project-ref")) {
-        await supabase.auth.signOut()
-      }
-    } catch {
-      // Abaikan jika gagal sign out
-    }
-
-    // Bersihkan sesi aktif lokal jika tidak dicentang "Ingat saya"
-    try {
-      if (localStorage.getItem("sp_remember_me") !== "true") {
-        localStorage.removeItem("sp_current_user_name")
-        localStorage.removeItem("sp_current_user_email")
-        localStorage.removeItem("sp_current_user_verified")
-      }
-    } catch {
-      // Abaikan jika localStorage tidak aktif
-    }
-
-    // Arahkan ke /login dan segarkan router
-    router.push("/login")
-    router.refresh()
+    await performLogout()
   }
 
   const initials = getInitials(userName)

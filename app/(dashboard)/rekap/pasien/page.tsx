@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useSyncExternalStore } from "react"
 import {
   Download,
   Users,
@@ -17,6 +17,8 @@ import {
   Calendar,
   BedSingle,
   User,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PeriodFilterBar } from "@/components/period-filter-bar"
@@ -29,7 +31,8 @@ import {
   parseAnyDate,
 } from "@/lib/utils/period-filter"
 import { exportToCsv } from "@/lib/utils/csv-export"
-import { fetchPatientsFromDb } from "@/lib/services/pasien-service"
+import { fetchPatientsFromDb, deleteAllPatientsInDb } from "@/lib/services/pasien-service"
+import { AppModal } from "@/components/app-modal"
 import type { Patient } from "@/app/(dashboard)/kelola-pasien/page"
 
 export default function RekapPasienPage() {
@@ -40,6 +43,57 @@ export default function RekapPasienPage() {
   const [careFilter, setCareFilter] = useState<"semua" | "total" | "parsial" | "minimal">("semua")
   const [searchTerm, setSearchTerm] = useState("")
   const [downloadSuccessToast, setDownloadSuccessToast] = useState<string | null>(null)
+
+  // State Hak Akses Pengelola & Modal Hapus Total Pasien
+  const currentUserRole = useSyncExternalStore(
+    (onStoreChange) => {
+      window.addEventListener("storage", onStoreChange)
+      return () => window.removeEventListener("storage", onStoreChange)
+    },
+    () => {
+      if (typeof window === "undefined") return "perawat"
+      return localStorage.getItem("sp_current_user_role") || "perawat"
+    },
+    () => "perawat"
+  )
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false)
+  const [deleteCountdown, setDeleteCountdown] = useState(5)
+  const [isDeletingAll, setIsDeletingAll] = useState(false)
+  const [deleteSuccessToast, setDeleteSuccessToast] = useState<string | null>(null)
+  const isPengelola = currentUserRole === "pengelola"
+
+  // Countdown timer 5 detik saat modal konfirmasi hapus terbuka
+  useEffect(() => {
+    let timer: NodeJS.Timeout
+    if (showDeleteAllModal && deleteCountdown > 0) {
+      timer = setTimeout(() => {
+        setDeleteCountdown((prev) => prev - 1)
+      }, 1000)
+    }
+    return () => clearTimeout(timer)
+  }, [showDeleteAllModal, deleteCountdown])
+
+  const handleOpenDeleteAllModal = () => {
+    setDeleteCountdown(5)
+    setShowDeleteAllModal(true)
+  }
+
+  const handleConfirmDeleteAll = async () => {
+    if (deleteCountdown > 0 || isDeletingAll) return
+    setIsDeletingAll(true)
+    try {
+      await deleteAllPatientsInDb()
+      setPatients([])
+      setShowDeleteAllModal(false)
+      setDeleteSuccessToast("Seluruh data rekap pasien berhasil dihapus total dari database.")
+      setTimeout(() => setDeleteSuccessToast(null), 5000)
+    } catch (err) {
+      console.error("Gagal menghapus data pasien:", err)
+      alert("Gagal menghapus data pasien dari database.")
+    } finally {
+      setIsDeletingAll(false)
+    }
+  }
 
   // Sinkronkan periode filter dengan waktu lokal pengguna di sisi klien
   useEffect(() => {
@@ -332,24 +386,50 @@ export default function RekapPasienPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleDownloadCsv}
-          disabled={displayedPatients.length === 0}
-          className={cn(
-            "flex items-center gap-2 bg-[#512da8] hover:bg-[#43238c] text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer w-fit select-none",
-            displayedPatients.length === 0 && "opacity-50 cursor-not-allowed hover:bg-[#512da8]"
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Tombol Hapus Seluruh Pasien - KHUSUS PENGELOLA */}
+          {isPengelola && (
+            <button
+              type="button"
+              onClick={handleOpenDeleteAllModal}
+              disabled={patients.length === 0}
+              className={cn(
+                "flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer w-fit select-none",
+                patients.length === 0 && "opacity-50 cursor-not-allowed hover:bg-red-600"
+              )}
+            >
+              <Trash2 className="size-4" />
+              <span>Hapus Rekap Pasien</span>
+            </button>
           )}
-        >
-          <Download className="size-4" />
-          <span>
-            Download Rekap CSV ({activeTab === "aktif" ? "Pasien Aktif" : "Pasien Keluar"})
-          </span>
-          <span className="ml-1 px-1.5 py-0.2 bg-white/20 text-white rounded-full text-[10px] font-bold">
-            {displayedPatients.length}
-          </span>
-        </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadCsv}
+            disabled={displayedPatients.length === 0}
+            className={cn(
+              "flex items-center gap-2 bg-[#512da8] hover:bg-[#43238c] text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer w-fit select-none",
+              displayedPatients.length === 0 && "opacity-50 cursor-not-allowed hover:bg-[#512da8]"
+            )}
+          >
+            <Download className="size-4" />
+            <span>
+              Download Rekap CSV ({activeTab === "aktif" ? "Pasien Aktif" : "Pasien Keluar"})
+            </span>
+            <span className="ml-1 px-1.5 py-0.2 bg-white/20 text-white rounded-full text-[10px] font-bold">
+              {displayedPatients.length}
+            </span>
+          </button>
+        </div>
       </div>
+
+      {/* Toast Notifikasi Berhasil Hapus / Unduh */}
+      {deleteSuccessToast && (
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 text-xs font-semibold">
+          <CheckCircle2 className="size-4 shrink-0 text-red-600 dark:text-red-400" />
+          <span>{deleteSuccessToast}</span>
+        </div>
+      )}
 
       {/* Toast Notifikasi Unduh */}
       {downloadSuccessToast && (
@@ -632,6 +712,59 @@ export default function RekapPasienPage() {
           </div>
         )}
       </div>
+
+      {/* MODAL KONFIRMASI HAPUS REKAP PASIEN (KHUSUS PENGELOLA DENGAN COUNTDOWN 5 DETIK) */}
+      <AppModal
+        isOpen={showDeleteAllModal}
+        onClose={() => {
+          if (!isDeletingAll) setShowDeleteAllModal(false)
+        }}
+        title="Konfirmasi Hapus Rekap Pasien"
+        subtitle="Tindakan Berbahaya (Super Admin Pengelola)"
+        icon={<AlertTriangle className="size-5 text-red-600" />}
+        onSubmit={(e) => {
+          e.preventDefault()
+          void handleConfirmDeleteAll()
+        }}
+        submitText={
+          deleteCountdown > 0
+            ? `Konfirmasi Hapus (${deleteCountdown}s)`
+            : isDeletingAll
+            ? "Menghapus..."
+            : "Ya, Hapus Total Rekap Pasien"
+        }
+        submitVariant="danger"
+        isSubmitting={isDeletingAll || deleteCountdown > 0}
+        maxWidth="lg"
+      >
+        <div className="space-y-3.5 text-xs text-foreground">
+          <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-800 dark:text-red-300 leading-relaxed space-y-1.5">
+            <p className="font-bold flex items-center gap-1.5">
+              <AlertTriangle className="size-4 shrink-0 text-red-600" />
+              Peringatan Penghapusan Total Database
+            </p>
+            <p>
+              Tindakan ini akan <strong>menghapus seluruh data rekap pasien</strong> (baik pasien aktif maupun pasien keluar/BLPL) secara permanen dari tabel database Supabase dan penyimpanan lokal sistem.
+            </p>
+            <p className="text-[11px] text-red-700/80 dark:text-red-400">
+              Data yang sudah dihapus tidak dapat dipulihkan kembali. Pastikan Anda telah mengunduh laporan CSV rekap pasien terlebih dahulu jika datanya masih dibutuhkan.
+            </p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700 text-[11px] text-muted-foreground">
+            Total pasien yang akan dihapus: <strong className="text-foreground">{patients.length} pasien</strong>.
+            {deleteCountdown > 0 ? (
+              <span className="block mt-1 text-amber-600 dark:text-amber-400 font-semibold">
+                Tombol konfirmasi hapus akan aktif dalam {deleteCountdown} detik...
+              </span>
+            ) : (
+              <span className="block mt-1 text-emerald-600 dark:text-emerald-400 font-semibold">
+                Silakan klik tombol konfirmasi di bawah jika Anda yakin.
+              </span>
+            )}
+          </div>
+        </div>
+      </AppModal>
     </div>
   )
 }

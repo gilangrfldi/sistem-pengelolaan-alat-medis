@@ -56,6 +56,7 @@ export default function KelolaPerawatPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [nurseToDelete, setNurseToDelete] = useState<NurseAccount | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteCountdown, setDeleteCountdown] = useState(5)
 
   // State Modal Transfer Kepemilikan Super Admin
   const [showTransferModal, setShowTransferModal] = useState(false)
@@ -145,20 +146,38 @@ export default function KelolaPerawatPage() {
     toast.success(nextStatus === "aktif" ? "Akses perawat diaktifkan" : "Akses perawat dinonaktifkan")
   }
 
+  // Countdown timer 5 detik saat modal konfirmasi hapus akun perawat terbuka
+  useEffect(() => {
+    let timer: NodeJS.Timeout
+    if (showDeleteModal && deleteCountdown > 0) {
+      timer = setTimeout(() => {
+        setDeleteCountdown((prev) => prev - 1)
+      }, 1000)
+    }
+    return () => clearTimeout(timer)
+  }, [showDeleteModal, deleteCountdown])
+
   // Buka Konfirmasi Hapus Akun
   const handleOpenDeleteModal = (nurse: NurseAccount) => {
     if (nurse.role === "pengelola") return
     setNurseToDelete(nurse)
+    setDeleteCountdown(5)
     setShowDeleteModal(true)
   }
 
   // Konfirmasi Hapus Akun
   const handleConfirmDelete = async () => {
-    if (!nurseToDelete) return
+    if (!nurseToDelete || deleteCountdown > 0 || isDeleting) return
     setIsDeleting(true)
     try {
-      await deleteNurseAccountInDb(nurseToDelete.id)
-      setNurses((prev) => prev.filter((n) => n.id !== nurseToDelete.id))
+      await deleteNurseAccountInDb(nurseToDelete.id, nurseToDelete.email)
+      setNurses((prev) =>
+        prev.filter(
+          (n) =>
+            n.id !== nurseToDelete.id &&
+            n.email.toLowerCase() !== nurseToDelete.email.toLowerCase()
+        )
+      )
       setShowDeleteModal(false)
       setNurseToDelete(null)
       toast.success("Akun perawat berhasil dihapus")
@@ -198,7 +217,7 @@ export default function KelolaPerawatPage() {
           localStorage.removeItem("sp_current_user_status")
           localStorage.removeItem("sp_remember_me")
         }
-        router.push("/login")
+        router.push("/masuk")
       }, 2500)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -528,7 +547,9 @@ export default function KelolaPerawatPage() {
       {/* 5. Modal Konfirmasi Hapus Akun Perawat */}
       <AppModal
         isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
+        onClose={() => {
+          if (!isDeleting) setShowDeleteModal(false)
+        }}
         title="Konfirmasi Hapus Akun Perawat"
         maxWidth="sm"
         showFooter={false}
@@ -551,18 +572,28 @@ export default function KelolaPerawatPage() {
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
             <button
               type="button"
+              disabled={isDeleting}
               onClick={() => setShowDeleteModal(false)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
+              className="px-4 py-2 rounded-xl text-xs font-semibold border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer disabled:opacity-50"
             >
               Batal
             </button>
             <button
               type="button"
-              disabled={isDeleting}
+              disabled={isDeleting || deleteCountdown > 0}
               onClick={handleConfirmDelete}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition cursor-pointer shadow-sm disabled:opacity-50"
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm",
+                deleteCountdown > 0 || isDeleting
+                  ? "bg-rose-400 dark:bg-rose-900/60 text-white/80 cursor-not-allowed opacity-60"
+                  : "bg-rose-600 hover:bg-rose-700 text-white cursor-pointer"
+              )}
             >
-              {isDeleting ? "Menghapus..." : "Ya, Hapus Akun"}
+              {deleteCountdown > 0
+                ? `Konfirmasi Hapus (${deleteCountdown}s)`
+                : isDeleting
+                ? "Menghapus..."
+                : "Ya, Hapus Akun"}
             </button>
           </div>
         </div>

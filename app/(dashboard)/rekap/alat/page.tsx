@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useSyncExternalStore } from "react"
 import {
   Download,
   Clock,
@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   RotateCcw,
+  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PeriodFilterBar } from "@/components/period-filter-bar"
@@ -26,7 +27,12 @@ import {
   fetchTimedToolsFromDb,
   fetchCountToolsFromDb,
   fetchDamagedToolsFromDb,
+  deleteAllTimedToolsInDb,
+  deleteAllCountToolsInDb,
+  deleteAllDamagedToolsInDb,
+  deleteAllToolRecordsInDb,
 } from "@/lib/services/alat-service"
+import { AppModal } from "@/components/app-modal"
 import type {
   TimedToolUsageRecord,
   CountToolUsageRecord,
@@ -41,6 +47,77 @@ export default function RekapAlatPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [downloadSuccessToast, setDownloadSuccessToast] = useState<string | null>(null)
+
+  // State Hak Akses Pengelola & Modal Hapus Rekap Alat
+  const currentUserRole = useSyncExternalStore(
+    (onStoreChange) => {
+      window.addEventListener("storage", onStoreChange)
+      return () => window.removeEventListener("storage", onStoreChange)
+    },
+    () => {
+      if (typeof window === "undefined") return "perawat"
+      return localStorage.getItem("sp_current_user_role") || "perawat"
+    },
+    () => "perawat"
+  )
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteCountdown, setDeleteCountdown] = useState(5)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteScope, setDeleteScope] = useState<"current_tab" | "all">("current_tab")
+  const [deleteSuccessToast, setDeleteSuccessToast] = useState<string | null>(null)
+  const isPengelola = currentUserRole === "pengelola"
+
+  // Countdown timer 5 detik saat modal konfirmasi hapus alat terbuka
+  useEffect(() => {
+    let timer: NodeJS.Timeout
+    if (showDeleteModal && deleteCountdown > 0) {
+      timer = setTimeout(() => {
+        setDeleteCountdown((prev) => prev - 1)
+      }, 1000)
+    }
+    return () => clearTimeout(timer)
+  }, [showDeleteModal, deleteCountdown])
+
+  const handleOpenDeleteModal = () => {
+    setDeleteScope("current_tab")
+    setDeleteCountdown(5)
+    setShowDeleteModal(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (deleteCountdown > 0 || isDeleting) return
+    setIsDeleting(true)
+    try {
+      if (deleteScope === "all") {
+        await deleteAllToolRecordsInDb()
+        setTimedTools([])
+        setCountTools([])
+        setDamagedTools([])
+        setDeleteSuccessToast("Seluruh riwayat rekap alat medis (semua kategori) berhasil dihapus total dari database.")
+      } else {
+        if (activeTab === "waktu") {
+          await deleteAllTimedToolsInDb()
+          setTimedTools([])
+          setDeleteSuccessToast("Seluruh riwayat rekap alat hitungan waktu berhasil dihapus total.")
+        } else if (activeTab === "kali") {
+          await deleteAllCountToolsInDb()
+          setCountTools([])
+          setDeleteSuccessToast("Seluruh riwayat rekap alat hitungan kali berhasil dihapus total.")
+        } else if (activeTab === "rusak") {
+          await deleteAllDamagedToolsInDb()
+          setDamagedTools([])
+          setDeleteSuccessToast("Seluruh riwayat laporan alat rusak berhasil dihapus total.")
+        }
+      }
+      setShowDeleteModal(false)
+      setTimeout(() => setDeleteSuccessToast(null), 5000)
+    } catch (err) {
+      console.error("Gagal menghapus rekap alat:", err)
+      alert("Gagal menghapus rekap alat dari database.")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   // Sinkronkan periode filter dengan waktu lokal pengguna di sisi klien
   useEffect(() => {
@@ -334,6 +411,22 @@ export default function RekapAlatPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Tombol Hapus Rekap Alat - KHUSUS PENGELOLA */}
+          {isPengelola && (
+            <button
+              type="button"
+              onClick={handleOpenDeleteModal}
+              disabled={currentTabRowCount === 0}
+              className={cn(
+                "flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer select-none",
+                currentTabRowCount === 0 && "opacity-50 cursor-not-allowed hover:bg-red-600"
+              )}
+            >
+              <Trash2 className="size-4" />
+              <span>Hapus Rekap Alat</span>
+            </button>
+          )}
+
           {/* Tombol Unduh Tab Aktif */}
           <button
             type="button"
@@ -361,7 +454,14 @@ export default function RekapAlatPage() {
         </div>
       </div>
 
-      {/* Toast Notifikasi Unduh */}
+      {/* Toast Notifikasi Unduh / Hapus */}
+      {deleteSuccessToast && (
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 text-xs font-semibold">
+          <CheckCircle2 className="size-4 shrink-0 text-red-600 dark:text-red-400" />
+          <span>{deleteSuccessToast}</span>
+        </div>
+      )}
+
       {downloadSuccessToast && (
         <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold">
           <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -678,6 +778,116 @@ export default function RekapAlatPage() {
           </div>
         )}
       </div>
+
+      {/* MODAL KONFIRMASI HAPUS REKAP ALAT (KHUSUS PENGELOLA DENGAN COUNTDOWN 5 DETIK) */}
+      <AppModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          if (!isDeleting) setShowDeleteModal(false)
+        }}
+        title="Konfirmasi Hapus Rekapitulasi Alat"
+        subtitle="Tindakan Berbahaya (Super Admin Pengelola)"
+        icon={<AlertTriangle className="size-5 text-red-600" />}
+        onSubmit={(e) => {
+          e.preventDefault()
+          void handleConfirmDelete()
+        }}
+        submitText={
+          deleteCountdown > 0
+            ? `Konfirmasi Hapus (${deleteCountdown}s)`
+            : isDeleting
+            ? "Menghapus..."
+            : "Ya, Hapus Data Rekap Alat"
+        }
+        submitVariant="danger"
+        isSubmitting={isDeleting || deleteCountdown > 0}
+        maxWidth="lg"
+      >
+        <div className="space-y-4 text-xs text-foreground">
+          <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-800 dark:text-red-300 leading-relaxed space-y-1.5">
+            <p className="font-bold flex items-center gap-1.5">
+              <AlertTriangle className="size-4 shrink-0 text-red-600" />
+              Peringatan Penghapusan Riwayat Alat Medis
+            </p>
+            <p>
+              Tindakan ini akan <strong>menghapus riwayat rekapitulasi alat medis</strong> secara permanen dari database Supabase dan penyimpanan lokal. Data yang sudah dihapus tidak dapat dipulihkan kembali.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-2">
+              Pilih Lingkup Penghapusan:
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <label
+                className={cn(
+                  "p-3 rounded-xl border flex flex-col gap-1 cursor-pointer transition select-none",
+                  deleteScope === "current_tab"
+                    ? "bg-red-50 dark:bg-red-950/40 border-red-400 font-semibold text-red-900 dark:text-red-200 shadow-2xs"
+                    : "bg-white dark:bg-neutral-800 border-neutral-200 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="deleteScope"
+                    checked={deleteScope === "current_tab"}
+                    onChange={() => setDeleteScope("current_tab")}
+                    className="text-red-600 focus:ring-0"
+                  />
+                  <span className="text-xs font-bold">
+                    Hanya Kategori Ini (
+                    {activeTab === "waktu"
+                      ? "Hitungan Waktu"
+                      : activeTab === "kali"
+                      ? "Hitungan Kali"
+                      : "Alat Rusak"}
+                    )
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground ml-5">
+                  Menghapus {currentTabRowCount} baris rekap pada tab yang aktif saat ini.
+                </span>
+              </label>
+
+              <label
+                className={cn(
+                  "p-3 rounded-xl border flex flex-col gap-1 cursor-pointer transition select-none",
+                  deleteScope === "all"
+                    ? "bg-red-50 dark:bg-red-950/40 border-red-400 font-semibold text-red-900 dark:text-red-200 shadow-2xs"
+                    : "bg-white dark:bg-neutral-800 border-neutral-200 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="deleteScope"
+                    checked={deleteScope === "all"}
+                    onChange={() => setDeleteScope("all")}
+                    className="text-red-600 focus:ring-0"
+                  />
+                  <span className="text-xs font-bold">Semua Rekap (Total)</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground ml-5">
+                  Menghapus seluruh riwayat Hitungan Waktu, Hitungan Kali, dan Alat Rusak.
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700 text-[11px] text-muted-foreground">
+            {deleteCountdown > 0 ? (
+              <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                Tombol konfirmasi hapus akan aktif dalam {deleteCountdown} detik...
+              </span>
+            ) : (
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                Silakan klik tombol konfirmasi di bawah untuk memproses penghapusan.
+              </span>
+            )}
+          </div>
+        </div>
+      </AppModal>
     </div>
   )
 }
