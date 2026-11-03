@@ -81,7 +81,7 @@ export interface ShiftHistoryRecord {
   akhir: number
 }
 
-// Data awal standar HCU (Tersinkronisasi murni dengan Supabase)
+// Data awal pasien HCU
 const initialPatients: Patient[] = []
 
 // Fallback shift untuk SSR
@@ -172,7 +172,7 @@ function KelolaPasienContent() {
   const [dischargeReason, setDischargeReason] = useState("Boleh Pulang (Sembuh)")
   const [dischargeDateObj, setDischargeDateObj] = useState<Date | undefined>(new Date())
 
-  // Inisialisasi data pasien & sinkronisasi Supabase
+  // Inisialisasi data pasien
   useEffect(() => {
     let isMounted = true
 
@@ -190,7 +190,7 @@ function KelolaPasienContent() {
           setCurrentNurse(cachedNurse.toLowerCase().startsWith("ns.") ? cachedNurse : `Ns. ${cachedNurse}`)
         }
 
-        // Ambil data pasien asli dari Supabase
+        // Ambil data pasien dari server
         const res = await fetchPatientsFromDb()
         if (!isMounted) return
 
@@ -204,7 +204,7 @@ function KelolaPasienContent() {
           return
         }
 
-        // Jika Supabase offline atau gagal terhubung, periksa localStorage
+        // Fallback penyimpanan lokal jika offline
         const savedPatients = localStorage.getItem("sp_hcu_patients")
         if (savedPatients) {
           try {

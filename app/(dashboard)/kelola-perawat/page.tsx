@@ -30,6 +30,7 @@ import {
   transferOwnershipInDb,
 } from "@/lib/services/nurse-service"
 import { toast } from "@/components/ui/app-toast"
+import { StatsSection, StatItem } from "@/components/stats-section"
 
 export default function KelolaPerawatPage() {
   const router = useRouter()
@@ -106,6 +107,48 @@ export default function KelolaPerawatPage() {
     const nonaktif = nurses.filter((n) => n.status === "nonaktif").length
     return { total, aktif, pending, nonaktif }
   }, [nurses])
+
+  const nurseStatItems: StatItem[] = useMemo(
+    () => [
+      {
+        id: "total_perawat",
+        title: "Total Akun",
+        badge: "TOTAL AKUN",
+        value: stats.total,
+        description: "Seluruh perawat terdaftar",
+        color: "blue",
+        icon: <Users className="size-4" />,
+      },
+      {
+        id: "akses_aktif",
+        title: "Akses Aktif",
+        badge: "AKSES AKTIF",
+        value: stats.aktif,
+        description: "Dapat mengakses sistem HCU",
+        color: "green",
+        icon: <UserCheck className="size-4" />,
+      },
+      {
+        id: "menunggu_konfirmasi",
+        title: "Menunggu Konfirmasi",
+        badge: "PENDING",
+        value: stats.pending,
+        description: "Perlu persetujuan pengelola",
+        color: "yellow",
+        icon: <Clock className="size-4" />,
+      },
+      {
+        id: "dinonaktifkan",
+        title: "Dinonaktifkan",
+        badge: "NONAKTIF",
+        value: stats.nonaktif,
+        description: "Akses dibekukan sementara",
+        color: "red",
+        icon: <Ban className="size-4" />,
+      },
+    ],
+    [stats]
+  )
 
   // Filter List Perawat
   const filteredNurses = useMemo(() => {
@@ -267,48 +310,8 @@ export default function KelolaPerawatPage() {
         </button>
       </div>
 
-      {/* 2. Kartu Statistik Akun */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-4 rounded-2xl border border-sky-200 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/20">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-sky-800 dark:text-sky-300">Total Akun</span>
-            <Users className="size-4.5 text-sky-600 dark:text-sky-400" />
-          </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-black text-sky-950 dark:text-sky-100">
-            {stats.total}
-          </div>
-          <span className="text-[11px] text-sky-700/80 dark:text-sky-400">Seluruh perawat terdaftar</span>
-        </div>
-
-        <div className="p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/20">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">Akses Aktif</span>
-            <UserCheck className="size-4.5 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-black text-emerald-950 dark:text-emerald-100">
-            {stats.aktif}
-          </div>
-          <span className="text-[11px] text-emerald-700/80 dark:text-emerald-400">Dapat akses dashboard HCU</span>
-        </div>
-
-        <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20">
-          <div className="mt-2 text-2xl sm:text-3xl font-black text-amber-950 dark:text-amber-100">
-            {stats.pending}
-          </div>
-          <span className="text-[11px] text-amber-700/80 dark:text-amber-400">Perlu persetujuan pengelola</span>
-        </div>
-
-        <div className="p-4 rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/20">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-rose-800 dark:text-rose-300">Dinonaktifkan</span>
-            <Ban className="size-4.5 text-rose-600 dark:text-rose-400" />
-          </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-black text-rose-950 dark:text-rose-100">
-            {stats.nonaktif}
-          </div>
-          <span className="text-[11px] text-rose-700/80 dark:text-rose-400">Akses dibekukan sementara</span>
-        </div>
-      </div>
+      {/* Statistik Akun */}
+      <StatsSection stats={nurseStatItems} />
 
       {/* 3. Baris Pencarian & Filter Status */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-2xs">

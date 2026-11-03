@@ -41,14 +41,12 @@ import {
 } from "../page"
 
 export default function MasterAlatPage() {
-  // ========================================================
-  // STATE MASTER ALAT DARI SUPABASE DATABASE
-  // ========================================================
+  // State master alat
   const [masterTools, setMasterTools] = useState<MasterTool[]>(INITIAL_MASTER_TOOLS)
   const [damagedTools, setDamagedTools] = useState<DamagedToolRecord[]>(INITIAL_DAMAGED_TOOLS)
   const [timedTools, setTimedTools] = useState<TimedToolUsageRecord[]>([])
 
-  // Muat data langsung dari database Supabase
+  // Muat data master alat
   useEffect(() => {
     let ignore = false
     const loadData = async () => {
@@ -190,7 +188,7 @@ export default function MasterAlatPage() {
     setShowAddModal(true)
   }
 
-  // Submit Tambah Alat Baru (Simpan ke Supabase)
+  // Tambah alat baru
   const handleSubmitAddTool = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
@@ -305,7 +303,7 @@ export default function MasterAlatPage() {
     setShowEditModal(true)
   }, [])
 
-  // Submit Edit Alat (Update ke Supabase)
+  // Simpan perubahan alat
   const handleSubmitEditTool = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingTool) return
@@ -394,7 +392,7 @@ export default function MasterAlatPage() {
     setShowDamageModal(true)
   }, [masterTools])
 
-  // Submit Lapor Rusak (Simpan ke Supabase)
+  // Lapor alat rusak
   const handleSubmitDamage = async (e: React.FormEvent) => {
     e.preventDefault()
     setDmgError(null)
@@ -461,7 +459,7 @@ export default function MasterAlatPage() {
     setShowDeleteModal(true)
   }, [])
 
-  // Konfirmasi Hapus Alat (Hapus dari Supabase)
+  // Hapus alat dari katalog
   const handleConfirmDelete = async () => {
     if (!deletingTool) return
     try {
@@ -475,7 +473,7 @@ export default function MasterAlatPage() {
     toast.success("Alat berhasil dihapus")
   }
 
-  // Tandai Selesai Diperbaiki (Hapus dari Supabase)
+  // Tandai selesai diperbaiki
   const handleResolveDamage = async (id: string) => {
     try {
       await deleteDamagedToolInDb(id)

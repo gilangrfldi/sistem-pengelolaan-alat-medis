@@ -127,7 +127,7 @@ export default function RekapAlatPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  // Data Kategori Alat Medis dari Supabase (Hanya 2 Kategori Utama: Waktu & Kali, plus Alat Rusak)
+  // Data riwayat pemakaian alat medis
   const [timedTools, setTimedTools] = useState<TimedToolUsageRecord[]>([])
   const [countTools, setCountTools] = useState<CountToolUsageRecord[]>([])
   const [damagedTools, setDamagedTools] = useState<DamagedToolRecord[]>([])
@@ -786,7 +786,7 @@ export default function RekapAlatPage() {
           if (!isDeleting) setShowDeleteModal(false)
         }}
         title="Konfirmasi Hapus Rekapitulasi Alat"
-        subtitle="Tindakan Berbahaya (Super Admin Pengelola)"
+        subtitle="Tindakan Berisiko (Khusus Pengelola)"
         icon={<AlertTriangle className="size-5 text-red-600" />}
         onSubmit={(e) => {
           e.preventDefault()
@@ -807,10 +807,10 @@ export default function RekapAlatPage() {
           <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-800 dark:text-red-300 leading-relaxed space-y-1.5">
             <p className="font-bold flex items-center gap-1.5">
               <AlertTriangle className="size-4 shrink-0 text-red-600" />
-              Peringatan Penghapusan Riwayat Alat Medis
+              Peringatan Penghapusan Rekap Alat Medis
             </p>
             <p>
-              Tindakan ini akan <strong>menghapus riwayat rekapitulasi alat medis</strong> secara permanen dari database Supabase dan penyimpanan lokal. Data yang sudah dihapus tidak dapat dipulihkan kembali.
+              Tindakan ini akan <strong>menghapus riwayat rekapitulasi alat medis</strong> secara permanen dari server dan arsip lokal sistem. Data yang sudah dihapus tidak dapat dipulihkan kembali.
             </p>
           </div>
 

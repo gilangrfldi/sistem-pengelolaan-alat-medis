@@ -1,10 +1,7 @@
 import { createClient } from "@/lib/supabase/client"
 import type { Patient, CareLevel } from "@/app/(dashboard)/kelola-pasien/page"
 
-// ==============================================================================
-// TIPE DATA STRUKTUR TABEL PASIEN SUPABASE
-// ==============================================================================
-
+// Tipe data tabel pasien HCU
 interface PasienHcuRow {
   id: string
   name: string

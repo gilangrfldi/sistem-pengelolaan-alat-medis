@@ -44,7 +44,7 @@ export function BerandaDashboard() {
     return () => clearTimeout(timer)
   }, [])
 
-  // Ambil data Pasien & Alat Medis dari Supabase (dengan fallback localStorage)
+  // Muat data pasien & alat medis
   useEffect(() => {
     let isMounted = true
 

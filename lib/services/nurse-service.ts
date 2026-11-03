@@ -1,9 +1,6 @@
 import { createClient } from "@/lib/supabase/client"
 
-// ==============================================================================
-// TIPE DATA AKUN PERAWAT & PENGELOLA
-// ==============================================================================
-
+// Tipe data akun perawat & pengelola
 export type NurseRole = "pengelola" | "perawat"
 export type NurseStatus = "aktif" | "pending" | "nonaktif"
 

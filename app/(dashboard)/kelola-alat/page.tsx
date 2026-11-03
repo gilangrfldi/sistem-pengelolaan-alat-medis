@@ -292,7 +292,7 @@ export const INITIAL_MASTER_TOOLS: MasterTool[] = [
   { id: "mt-23", name: "Alat Cek Gula Darah (GDS)", category: "kali", totalUnits: 0, hasUnitNumber: false },
 ]
 
-// Data pemakaian alat medis HCU (Dihapus data lokal dummy, kini tersinkronisasi murni dengan Supabase)
+// Data pemakaian alat medis HCU
 export const INITIAL_TIMED_TOOLS: TimedToolUsageRecord[] = []
 export const INITIAL_COUNT_TOOLS: CountToolUsageRecord[] = []
 export const INITIAL_DAMAGED_TOOLS: DamagedToolRecord[] = []
@@ -336,9 +336,7 @@ const DEFAULT_SHIFT_INFO: ShiftInfo = {
 }
 
 export default function KelolaAlatPage() {
-  // ========================================================
-  // STATE DATA DARI DATABASE SUPABASE (DATA ASLI RUANG HCU)
-  // ========================================================
+  // State data pemakaian alat medis HCU
   const [masterTools, setMasterTools] = useState<MasterTool[]>(INITIAL_MASTER_TOOLS)
   const [timedTools, setTimedTools] = useState<TimedToolUsageRecord[]>(INITIAL_TIMED_TOOLS)
   const [countTools, setCountTools] = useState<CountToolUsageRecord[]>(INITIAL_COUNT_TOOLS)
@@ -408,7 +406,7 @@ export default function KelolaAlatPage() {
     }
   }, [])
 
-  // 2. Muat Data Alat Medis Asli dari Database Supabase
+  // Muat data alat medis dari server
   useEffect(() => {
     let ignore = false
     const loadData = async () => {
@@ -689,7 +687,7 @@ export default function KelolaAlatPage() {
     setShowAttachModal(true)
   }
 
-  // Submit pemasangan alat baru (Tersinkron dengan Database Supabase)
+  // Pemasangan alat baru
   const handleSubmitAttach = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
@@ -932,7 +930,7 @@ export default function KelolaAlatPage() {
     }
   }
 
-  // Konfirmasi penyelesaian timer alat (Update ke Supabase)
+  // Selesaikan timer alat
   const handleConfirmStopTimer = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedTimedTool) return
@@ -1034,7 +1032,7 @@ export default function KelolaAlatPage() {
     )
   }
 
-  // Simpan Tindakan Medis ke Supabase (masuk ke Rekap & Riwayat secara permanen di database)
+  // Simpan tindakan medis
   const handleSaveCountTool = async (id: string) => {
     const target = countTools.find((c) => c.id === id)
     if (!target) return
@@ -1086,7 +1084,7 @@ export default function KelolaAlatPage() {
 
 
 
-  // Submit Lapor Alat Rusak (Simpan ke Supabase)
+  // Lapor alat rusak
   const handleSubmitDamage = async (e: React.FormEvent) => {
     e.preventDefault()
     setDmgError(null)
@@ -1147,7 +1145,7 @@ export default function KelolaAlatPage() {
 
 
 
-  // Submit Tambah Alat Baru ke Master (Simpan ke Supabase)
+  // Tambah alat baru ke master
   const handleSubmitAddMaster = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMasterName.trim()) return

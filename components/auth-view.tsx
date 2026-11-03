@@ -660,7 +660,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
           ) {
             msg = "Email ini sudah terdaftar. Silakan klik tombol 'MASUK' atau gunakan 'Masuk dengan Google'."
           } else if (error.message.includes("Database error saving new user")) {
-            msg = "Gagal menyimpan akun ke database. Silakan jalankan pembaruan skrip SQL terbaru di Supabase."
+            msg = "Terjadi kendala saat mendaftarkan akun. Silakan coba kembali beberapa saat lagi."
           }
           setAuthError(msg)
           setIsLoading(false)
@@ -830,7 +830,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
         if (error) {
           let msg = error.message
           if (error.message.toLowerCase().includes("rate limit")) {
-            msg = "Batas kuota email bawaan tercapai. Silakan tunggu beberapa saat atau hubungi pengelola."
+            msg = "Batas pengiriman email tercapai. Silakan tunggu beberapa saat sebelum mencoba kembali."
           }
           setResetError(msg)
           setIsSendingReset(false)
@@ -873,9 +873,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
       {/* Main Double Card Container */}
       <div className="relative w-full max-w-[850px] min-h-[500px] bg-white dark:bg-neutral-900 rounded-[32px] shadow-2xl overflow-hidden flex flex-col md:flex-row border border-neutral-100 dark:border-neutral-800">
         
-        {/* ======================================================== */}
-        {/* FORM MASUK (Sign In) */}
-        {/* ======================================================== */}
+        {/* Form Masuk */}
         <div
           className={cn(
             "w-full md:w-1/2 p-8 sm:p-12 flex flex-col justify-center items-center text-center transition-all duration-700 ease-in-out order-2 md:order-1",
@@ -910,14 +908,14 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
           <form onSubmit={handleSignIn} className="w-full max-w-[310px] space-y-3.5">
             <input
               type="email"
-              placeholder="Email"
+              placeholder="Email terdaftar"
               value={loginEmail}
               onChange={(e) => setLoginEmail(e.target.value)}
               required
               className="w-full bg-[#eeeeee] dark:bg-neutral-800 border-0 rounded-lg text-xs sm:text-sm px-4 py-3 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 text-neutral-800 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-[#512da8]/30 transition"
             />
 
-            {/* Input Kata Sandi dengan Ikon Mata */}
+            {/* Input Kata Sandi */}
             <div className="relative w-full">
               <input
                 type={showLoginPassword ? "text" : "password"}
@@ -941,7 +939,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
               </button>
             </div>
 
-            {/* Baris Bawah Input: Ingat Saya (Kiri) & Lupa Kata Sandi (Kanan) */}
+            {/* Ingat Saya & Lupa Kata Sandi */}
             <div className="flex items-center justify-between text-xs pt-0.5">
               <label className="flex items-center gap-1.5 cursor-pointer text-neutral-600 dark:text-neutral-400 select-none hover:text-neutral-900 dark:hover:text-neutral-200 transition">
                 <input
@@ -972,7 +970,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
               </button>
             </div>
 
-            {/* Pemisah "atau" */}
+            {/* Pemisah */}
             <div className="relative my-2.5">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t border-neutral-200 dark:border-neutral-700" />
@@ -984,7 +982,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
               </div>
             </div>
 
-            {/* Tombol Masuk dengan Google */}
+            {/* Masuk dengan Google */}
             <button
               type="button"
               onClick={() => handleGoogleSignIn("login")}
@@ -1012,7 +1010,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
               <span>{isGoogleLoading ? "Memproses Akun Google..." : "Masuk dengan Google"}</span>
             </button>
 
-            {/* Mobile Toggle Link */}
+            {/* Mobile Toggle */}
             <div className="md:hidden pt-4 text-xs text-neutral-500">
               Belum punya akun?{" "}
               <button
@@ -1026,9 +1024,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
           </form>
         </div>
 
-        {/* ======================================================== */}
-        {/* FORM BUAT AKUN (Sign Up) */}
-        {/* ======================================================== */}
+        {/* Form Buat Akun */}
         <div
           className={cn(
             "w-full md:w-1/2 p-8 sm:p-12 flex flex-col justify-center items-center text-center transition-all duration-700 ease-in-out order-2 md:order-2",
@@ -1055,7 +1051,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
           <form onSubmit={handleSignUp} className="w-full max-w-[310px] space-y-3.5">
             <input
               type="text"
-              placeholder="Nama Lengkap"
+              placeholder="Nama lengkap perawat"
               value={regName}
               onChange={(e) => setRegName(e.target.value)}
               required
@@ -1063,18 +1059,18 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
             />
             <input
               type="email"
-              placeholder="Email"
+              placeholder="Email dinas atau pribadi"
               value={regEmail}
               onChange={(e) => setRegEmail(e.target.value)}
               required
               className="w-full bg-[#eeeeee] dark:bg-neutral-800 border-0 rounded-lg text-xs sm:text-sm px-4 py-3 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 text-neutral-800 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-[#512da8]/30 transition"
             />
 
-            {/* Input Kata Sandi Registrasi dengan Ikon Mata */}
+            {/* Input Kata Sandi Registrasi */}
             <div className="relative w-full">
               <input
                 type={showRegPassword ? "text" : "password"}
-                placeholder="Kata Sandi (min. 6 karakter)"
+                placeholder="Kata sandi (minimal 6 karakter)"
                 value={regPassword}
                 onChange={(e) => setRegPassword(e.target.value)}
                 required
@@ -1105,7 +1101,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
               </button>
             </div>
 
-            {/* Pemisah "atau" */}
+            {/* Pemisah */}
             <div className="relative my-2.5">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t border-neutral-200 dark:border-neutral-700" />
@@ -1117,7 +1113,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
               </div>
             </div>
 
-            {/* Tombol Daftar dengan Google */}
+            {/* Daftar dengan Google */}
             <button
               type="button"
               onClick={() => handleGoogleSignIn("signup")}
@@ -1145,7 +1141,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
               <span>{isGoogleLoading ? "Memproses Akun Google..." : "Daftar dengan Google"}</span>
             </button>
 
-            {/* Mobile Toggle Link */}
+            {/* Mobile Toggle */}
             <div className="md:hidden pt-4 text-xs text-neutral-500">
               Sudah memiliki akun?{" "}
               <button
@@ -1159,9 +1155,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
           </form>
         </div>
 
-        {/* ======================================================== */}
-        {/* SLIDING PURPLE OVERLAY PANEL */}
-        {/* ======================================================== */}
+        {/* Panel Animasi Geser */}
         <div
           className={cn(
             "hidden md:flex absolute top-0 h-full w-1/2 z-20 transition-transform duration-700 ease-in-out overflow-hidden pointer-events-auto",
@@ -1177,7 +1171,6 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
             )}
           >
             {isSignUp ? (
-              // Tampilan saat di mode Buat Akun -> Ajakan Masuk
               <div className="animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center">
                 <h2 className="text-3xl font-extrabold tracking-tight mb-3">
                   Selamat Datang Kembali!
@@ -1194,7 +1187,6 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
                 </button>
               </div>
             ) : (
-              // Tampilan saat di mode Masuk -> Ajakan Buat Akun
               <div className="animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center">
                 <h2 className="text-3xl font-extrabold tracking-tight mb-3">
                   Halo, Rekan!
@@ -1217,14 +1209,12 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
 
       </div>
 
-      {/* Footer Info */}
+      {/* Footer */}
       <div className="mt-5 text-center text-xs text-neutral-400 dark:text-neutral-500">
         © 2026 RSUD Welas Asih • Sistem Informasi Pemantauan & Kalibrasi Alat Medis HCU
       </div>
 
-      {/* ======================================================== */}
-      {/* MODAL LUPA KATA SANDI */}
-      {/* ======================================================== */}
+      {/* Modal Lupa Kata Sandi */}
       {showForgotModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800">

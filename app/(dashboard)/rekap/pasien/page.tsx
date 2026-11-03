@@ -713,14 +713,14 @@ export default function RekapPasienPage() {
         )}
       </div>
 
-      {/* MODAL KONFIRMASI HAPUS REKAP PASIEN (KHUSUS PENGELOLA DENGAN COUNTDOWN 5 DETIK) */}
+      {/* Modal Konfirmasi Hapus Rekap Pasien */}
       <AppModal
         isOpen={showDeleteAllModal}
         onClose={() => {
           if (!isDeletingAll) setShowDeleteAllModal(false)
         }}
         title="Konfirmasi Hapus Rekap Pasien"
-        subtitle="Tindakan Berbahaya (Super Admin Pengelola)"
+        subtitle="Tindakan Berisiko (Khusus Pengelola)"
         icon={<AlertTriangle className="size-5 text-red-600" />}
         onSubmit={(e) => {
           e.preventDefault()
@@ -731,7 +731,7 @@ export default function RekapPasienPage() {
             ? `Konfirmasi Hapus (${deleteCountdown}s)`
             : isDeletingAll
             ? "Menghapus..."
-            : "Ya, Hapus Total Rekap Pasien"
+            : "Ya, Hapus Rekap Pasien"
         }
         submitVariant="danger"
         isSubmitting={isDeletingAll || deleteCountdown > 0}
@@ -741,10 +741,10 @@ export default function RekapPasienPage() {
           <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-800 dark:text-red-300 leading-relaxed space-y-1.5">
             <p className="font-bold flex items-center gap-1.5">
               <AlertTriangle className="size-4 shrink-0 text-red-600" />
-              Peringatan Penghapusan Total Database
+              Peringatan Penghapusan Rekap Pasien
             </p>
             <p>
-              Tindakan ini akan <strong>menghapus seluruh data rekap pasien</strong> (baik pasien aktif maupun pasien keluar/BLPL) secara permanen dari tabel database Supabase dan penyimpanan lokal sistem.
+              Tindakan ini akan <strong>menghapus seluruh data rekap pasien</strong> (baik pasien aktif maupun pasien keluar/BLPL) secara permanen dari server dan arsip lokal sistem.
             </p>
             <p className="text-[11px] text-red-700/80 dark:text-red-400">
               Data yang sudah dihapus tidak dapat dipulihkan kembali. Pastikan Anda telah mengunduh laporan CSV rekap pasien terlebih dahulu jika datanya masih dibutuhkan.

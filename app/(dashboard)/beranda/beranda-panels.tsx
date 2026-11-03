@@ -28,7 +28,7 @@ export function BerandaPanels({
   const [internalPatients, setInternalPatients] = useState<Patient[]>([])
   const [internalTimedTools, setInternalTimedTools] = useState<TimedToolUsageRecord[]>([])
 
-  // Sinkronisasi data pasien & alat dari Database Supabase serta fallback LocalStorage jika prop tidak disediakan
+  // Sinkronisasi data pasien & alat medis
   useEffect(() => {
     if (propPatients !== undefined && propTimedTools !== undefined) return
 

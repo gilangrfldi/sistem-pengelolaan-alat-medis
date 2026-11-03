@@ -6,10 +6,7 @@ import type {
   DamagedToolRecord,
 } from "@/app/(dashboard)/kelola-alat/page"
 
-// ==============================================================================
-// TIPE DATA STRUKTUR TABEL DATABASE SUPABASE (HANYA 2 KATEGORI: 'waktu' & 'kali')
-// ==============================================================================
-
+// Tipe data tabel alat medis
 interface MasterAlatRow {
   id: string
   name: string
@@ -71,10 +68,7 @@ interface AlatRusakRow {
   reported_by: string
 }
 
-// ==============================================================================
-// SERVICE KOMUNIKASI SUPABASE: MANAJEMEN ALAT MEDIS HCU
-// ==============================================================================
-
+// Layanan data alat medis HCU
 function getSupabase() {
   return createClient()
 }
