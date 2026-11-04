@@ -75,7 +75,7 @@ test.describe("CUJ-2: Manajemen Pasien HCU (Kelola Pasien)", () => {
     await authedPage.getByPlaceholder("Nama lengkap pasien...").fill("Ahmad Fauzi")
 
     // Isi Nomor Rekam Medis (RM)
-    await authedPage.getByPlaceholder("Contoh: 0102098 (maks 10 digit)").fill("12345678")
+    await authedPage.getByPlaceholder(/Contoh: 0102098/i).fill("12345678")
 
     // Pilih klasifikasi Perawatan Total
     await authedPage.getByRole("button", { name: "Perawatan Total" }).click()

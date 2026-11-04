@@ -12,13 +12,7 @@ import {
   extractHourFromTimeStr,
   isPeriodInFuture,
 } from "@/lib/utils/period-filter"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { AppSelect } from "@/components/ui/app-select"
 import { StatsSection, StatItem } from "@/components/stats-section"
 import { BerandaPanels } from "./beranda-panels"
 import { fetchPatientsFromDb } from "@/lib/services/pasien-service"
@@ -346,22 +340,21 @@ export function BerandaDashboard() {
             <span className="text-xs font-semibold text-muted-foreground shrink-0">
               Shift:
             </span>
-            <Select
-              value={shift}
-              onValueChange={(val) => {
-                if (val) setShift(val)
-              }}
-            >
-              <SelectTrigger className="w-full md:w-48 h-8.5 text-xs bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 font-medium">
-                <SelectValue placeholder="Pilih Shift" />
-              </SelectTrigger>
-              <SelectContent align="end" className="w-52">
-                <SelectItem value="Semua">Semua Shift</SelectItem>
-                <SelectItem value="Pagi">Pagi (07.00 - 14.00)</SelectItem>
-                <SelectItem value="Siang">Siang (14.00 - 21.00)</SelectItem>
-                <SelectItem value="Malam">Malam (21.00 - 07.00)</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="w-full md:w-52">
+              <AppSelect
+                value={shift}
+                onChange={(val) => setShift(val)}
+                options={[
+                  { value: "Semua", label: "Semua Shift", description: "24 Jam Operasional" },
+                  { value: "Pagi", label: "Pagi (07.00 - 14.00)", description: "Shift 1" },
+                  { value: "Siang", label: "Siang (14.00 - 21.00)", description: "Shift 2" },
+                  { value: "Malam", label: "Malam (21.00 - 07.00)", description: "Shift 3" },
+                ]}
+                size="sm"
+                headerTitle="Pilih Shift"
+                aria-label="Pilih Shift"
+              />
+            </div>
           </div>
         }
       />

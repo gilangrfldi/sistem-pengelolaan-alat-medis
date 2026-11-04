@@ -48,6 +48,9 @@ import {
 import { fetchPatientsFromDb } from "@/lib/services/pasien-service"
 import { toast } from "@/components/ui/app-toast"
 import { ModalLaporRusak } from "./components/modal-lapor-rusak"
+import { SearchableToolCombobox } from "./components/searchable-tool-combobox"
+import { AppDatePicker } from "@/components/ui/app-date-picker"
+import { AppTimePicker } from "@/components/ui/app-time-picker"
 import { REGULAR_BEDS, ISOLATION_BEDS, ALL_BEDS } from "@/lib/constants/beds"
 import { type StoredPatientRecord } from "@/lib/types/patient"
 import {
@@ -64,6 +67,9 @@ import {
   getShiftInfo,
   getFormattedDate,
   getFormattedTime,
+  getIsoDateString,
+  convertIsoDateToId,
+  convertIdDateToIso,
   formatDuration,
   calculateMinutesDifference,
 } from "@/lib/utils/date-time"
@@ -501,6 +507,7 @@ export default function KelolaAlatPage() {
   const [formLocations, setFormLocations] = useState<string[]>([])
   const [formUnitNumber, setFormUnitNumber] = useState<number | null>(null)
   const [formTimeMode, setFormTimeMode] = useState<"now" | "admission" | "manual">("now")
+  const [formActionDate, setFormActionDate] = useState(() => getIsoDateString())
   const [formManualStart, setFormManualStart] = useState("08:00")
   const [formManualEnd, setFormManualEnd] = useState("")
   const [formCountNumber, setFormCountNumber] = useState(1)
@@ -712,6 +719,7 @@ export default function KelolaAlatPage() {
     setFormTimeMode("now")
     const nowTimeStr = getFormattedTime(new Date()).slice(0, 5)
     setFormManualStart(nowTimeStr)
+    setFormActionDate(getIsoDateString())
     setFormManualEnd("")
     setFormCountNumber(1)
     setFormNotes("")
@@ -877,12 +885,19 @@ export default function KelolaAlatPage() {
         resolvedActionTime = formManualStart || nowTimeStr
       }
 
-      const fullActionTimeStr = `${resolvedActionTime} WIB (${getFormattedDate(now)})`
+      let resolvedActionDate = getFormattedDate(now)
+      if (formTimeMode === "admission" && patient.admissionDate) {
+        resolvedActionDate = patient.admissionDate
+      } else if (formActionDate) {
+        resolvedActionDate = convertIsoDateToId(formActionDate)
+      }
+
+      const fullActionTimeStr = `${resolvedActionTime} WIB (${resolvedActionDate})`
       const nowIso = new Date().toISOString()
       const newLog: CountActionLog = {
         id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         timeStr: `${resolvedActionTime} WIB`,
-        dateStr: getFormattedDate(now),
+        dateStr: resolvedActionDate,
         countAdded: formCountNumber,
         nurseName: currentNurse,
         timestamp: Date.now(),
@@ -2130,6 +2145,9 @@ export default function KelolaAlatPage() {
                 if (!formManualStart) {
                   setFormManualStart(getFormattedTime(new Date()).slice(0, 5))
                 }
+                if (!formActionDate) {
+                  setFormActionDate(getIsoDateString())
+                }
               }}
               className={cn(
                 "p-2.5 rounded-xl border text-xs font-semibold text-center transition cursor-pointer",
@@ -2168,41 +2186,23 @@ export default function KelolaAlatPage() {
 
           return (
             <div className="space-y-3.5 p-3.5 rounded-xl border border-amber-100 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/20">
-              <div>
-                <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1">
-                  Pilih Alat Hitungan Waktu *
-                </label>
-                <select
-                  value={formToolName}
-                  onChange={(e) => {
-                    const chosen = e.target.value
-                    setFormToolName(chosen)
-                    setFormUnitNumber(null)
-                    const m = masterTools.find((item) => item.name === chosen)
-                    if (m?.applicableLocations && m.applicableLocations.length === 1) {
-                      setFormLocations([m.applicableLocations[0]])
-                    } else {
-                      setFormLocations([])
-                    }
-                  }}
-                  className="w-full text-xs sm:text-sm p-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 cursor-pointer"
-                >
-                  {masterTools
-                    .filter((m) => m.category === "waktu")
-                    .map((m) => (
-                      <option key={m.id} value={m.name}>
-                        {m.name}{" "}
-                        {m.hasUnitNumber
-                          ? `(Unit #${m.unitStartNumber || 1} - #${m.unitEndNumber || m.totalUnits})`
-                          : m.totalUnits > 0
-                          ? `(${m.totalUnits} Unit)`
-                          : m.applicableLocations && m.applicableLocations.length > 0
-                          ? "(Alat Anatomi Tubuh)"
-                          : "(Sentral)"}
-                      </option>
-                    ))}
-                </select>
-              </div>
+              {/* Dropdown Pencarian Alat Hitungan Waktu Modern & Responsif Mobile */}
+              <SearchableToolCombobox
+                category="waktu"
+                tools={masterTools}
+                value={formToolName}
+                onChange={(chosen) => {
+                  setFormToolName(chosen)
+                  setFormUnitNumber(null)
+                  const m = masterTools.find((item) => item.name === chosen)
+                  if (m?.applicableLocations && m.applicableLocations.length === 1) {
+                    setFormLocations([m.applicableLocations[0]])
+                  } else {
+                    setFormLocations([])
+                  }
+                }}
+                label="Pilih Alat Hitungan Waktu *"
+              />
 
               {/* Lokasi Pemasangan Anatomi jika alat memilikinya */}
               {selectedMaster?.applicableLocations && selectedMaster.applicableLocations.length > 0 && (
@@ -2411,24 +2411,20 @@ export default function KelolaAlatPage() {
                 {formTimeMode === "manual" && (
                   <div className="grid grid-cols-2 gap-3 mt-2">
                     <div>
-                      <label className="block text-[11px] text-muted-foreground mb-1">Jam Mulai</label>
-                      <input
-                        type="time"
+                      <AppTimePicker
+                        label="Jam Mulai"
                         value={formManualStart}
-                        onChange={(e) => setFormManualStart(e.target.value)}
-                        className="w-full p-2 text-xs border rounded-lg bg-white dark:bg-neutral-800"
+                        onChange={(val) => setFormManualStart(val)}
+                        size="sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-muted-foreground mb-1">
-                        Jam Selesai (Opsional)
-                      </label>
-                      <input
-                        type="time"
+                      <AppTimePicker
+                        label="Jam Selesai (Opsional)"
                         value={formManualEnd}
-                        placeholder="Biarkan kosong jika masih berjalan"
-                        onChange={(e) => setFormManualEnd(e.target.value)}
-                        className="w-full p-2 text-xs border rounded-lg bg-white dark:bg-neutral-800"
+                        placeholder="Masih berjalan"
+                        onChange={(val) => setFormManualEnd(val)}
+                        size="sm"
                       />
                     </div>
                   </div>
@@ -2440,70 +2436,71 @@ export default function KelolaAlatPage() {
 
         {formCategory === "kali" && (
           <div className="space-y-3.5 p-3.5 rounded-xl border border-purple-100 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/20">
-            <div>
-              <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1">
-                Pilih Alat Hitungan Kali *
-              </label>
-              <select
-                value={formToolName}
-                onChange={(e) => setFormToolName(e.target.value)}
-                className="w-full text-xs sm:text-sm p-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 cursor-pointer"
-              >
-                {masterTools
-                  .filter((m) => m.category === "kali")
-                  .map((m) => (
-                    <option key={m.id} value={m.name}>
-                      {m.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
+            {/* Dropdown Pencarian Alat Hitungan Kali Modern & Responsif Mobile */}
+            <SearchableToolCombobox
+              category="kali"
+              tools={masterTools}
+              value={formToolName}
+              onChange={(chosen) => {
+                setFormToolName(chosen)
+                setFormLocations([])
+                setFormUnitNumber(null)
+              }}
+              label="Pilih Alat Hitungan Kali *"
+            />
 
             {/* Pilihan Waktu Pelaksanaan Tindakan */}
             <div>
               <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
                 Waktu Pelaksanaan Tindakan:
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
-                {/* 1. Input Waktu Tindakan Langsung (Default Waktu Sekarang & Dapat Diedit) */}
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+                {/* 1. Input Tanggal & Jam Tindakan (Default Hari Ini & Jam Sekarang, Dapat Diedit) */}
+                <div className="sm:col-span-7">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
-                      Waktu Sekarang (Dapat Diedit):
+                      Tanggal & Jam Tindakan:
                     </span>
                     {formTimeMode === "now" && (
                       <button
                         type="button"
                         onClick={() => {
-                          const nowStr = getFormattedTime(new Date()).slice(0, 5)
-                          setFormManualStart(nowStr)
+                          setFormActionDate(getIsoDateString())
+                          setFormManualStart(getFormattedTime(new Date()).slice(0, 5))
                         }}
                         className="text-[10px] text-[#512da8] dark:text-purple-400 hover:underline cursor-pointer"
                       >
-                        Reset Jam Sekarang
+                        Reset Sekarang
                       </button>
                     )}
                   </div>
-                  <input
-                    type="time"
-                    value={formManualStart || getFormattedTime(new Date()).slice(0, 5)}
-                    onFocus={() => setFormTimeMode("now")}
-                    onChange={(e) => {
-                      setFormManualStart(e.target.value)
-                      setFormTimeMode("now")
-                    }}
-                    required
-                    className={cn(
-                      "w-full h-10 px-3 text-sm font-semibold rounded-xl bg-white dark:bg-neutral-800 border transition cursor-pointer",
-                      formTimeMode === "now"
-                        ? "border-[#512da8] ring-1 ring-[#512da8] text-neutral-900 dark:text-neutral-100"
-                        : "border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400"
-                    )}
-                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Input Tanggal Tindakan Kustom */}
+                    <AppDatePicker
+                      value={formActionDate}
+                      onChange={(newVal) => {
+                        setFormActionDate(newVal)
+                        setFormTimeMode("now")
+                      }}
+                      placeholder="Pilih tanggal"
+                      size="md"
+                    />
+
+                    {/* Input Jam Tindakan Kustom */}
+                    <AppTimePicker
+                      value={formManualStart || getFormattedTime(new Date()).slice(0, 5)}
+                      onChange={(newVal) => {
+                        setFormManualStart(newVal)
+                        setFormTimeMode("now")
+                      }}
+                      placeholder="Pilih jam"
+                      size="md"
+                    />
+                  </div>
                 </div>
 
                 {/* 2. Opsi Sesuai Jam Masuk Pasien */}
-                <div>
+                <div className="sm:col-span-5">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
                       Opsi Jam Masuk Pasien:
@@ -2513,20 +2510,25 @@ export default function KelolaAlatPage() {
                     type="button"
                     onClick={() => {
                       setFormTimeMode("admission")
-                      const adm = activePatientsMap[formBed]?.admissionTime?.replace(" WIB", "").trim()
+                      const patient = activePatientsMap[formBed]
+                      const adm = patient?.admissionTime?.replace(" WIB", "").trim()
                       if (adm) {
                         setFormManualStart(adm)
                       }
+                      const admDate = patient?.admissionDate
+                      if (admDate) {
+                        setFormActionDate(convertIdDateToIso(admDate))
+                      }
                     }}
                     className={cn(
-                      "w-full h-10 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer text-center",
+                      "w-full h-10 px-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer text-center truncate",
                       formTimeMode === "admission"
                         ? "bg-sky-600 text-white border-sky-700 shadow-xs"
                         : "bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50"
                     )}
                   >
-                    <Clock className="size-3.5" />
-                    <span>
+                    <Clock className="size-3.5 shrink-0" />
+                    <span className="truncate">
                       Sesuai Jam Masuk ({activePatientsMap[formBed]?.admissionTime?.replace(" WIB", "") || "Pasien"})
                     </span>
                   </button>
@@ -2537,9 +2539,9 @@ export default function KelolaAlatPage() {
                 <div className="p-2.5 rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/20 text-sky-800 dark:text-sky-300 text-xs flex items-center gap-2 mt-2">
                   <CheckCircle2 className="size-4 shrink-0 text-sky-600 dark:text-sky-400" />
                   <span>
-                    Waktu tindakan dicatat sesuai jam masuk pasien:{" "}
+                    Waktu tindakan dicatat sesuai tanggal & jam masuk pasien:{" "}
                     <strong>
-                      pukul {activePatientsMap[formBed]?.admissionTime || "00:00"} WIB
+                      {activePatientsMap[formBed]?.admissionDate || "Hari ini"} pukul {activePatientsMap[formBed]?.admissionTime || "00:00"} WIB
                     </strong>
                   </span>
                 </div>
@@ -2637,15 +2639,11 @@ export default function KelolaAlatPage() {
 
             {/* Input Jam Selesai dengan Fitur Koreksi Manual */}
             <div>
-              <label className="block text-xs font-bold text-neutral-900 dark:text-neutral-100 mb-1">
-                Jam Selesai / Dilepas (Koreksi jika terlambat input):
-              </label>
-              <input
-                type="time"
+              <AppTimePicker
+                label="Jam Selesai / Dilepas (Koreksi jika terlambat input):"
                 value={stopTimeInput}
-                onChange={(e) => handleStopTimeChange(e.target.value)}
+                onChange={(val) => handleStopTimeChange(val)}
                 required
-                className="w-full p-2.5 text-sm border rounded-lg bg-background border-border font-mono font-bold focus:outline-[#512da8]"
               />
               <p className="text-[11px] text-muted-foreground mt-1">
                 Default terisi jam saat ini. Anda dapat memajukan jam jika alat sebenarnya sudah dilepas lebih awal.
@@ -2936,7 +2934,7 @@ export default function KelolaAlatPage() {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-dashed border-[#512da8]/40 text-[#512da8] hover:bg-[#512da8]/5 transition cursor-pointer"
                       >
                         <Plus className="size-3.5" />
-                        <span>+ Tambah Lokasi Pemasangan ({newMasterLocations.length}/10)</span>
+                        <span>Tambah Lokasi Pemasangan ({newMasterLocations.length}/10)</span>
                       </button>
                     )}
                   </div>

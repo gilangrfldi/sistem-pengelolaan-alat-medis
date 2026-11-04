@@ -3,6 +3,8 @@
 import * as React from "react"
 import { Calendar, Filter, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { AppSelect } from "@/components/ui/app-select"
+import { AppDatePicker } from "@/components/ui/app-date-picker"
 import {
   FilterPeriodType,
   PeriodFilterState,
@@ -25,8 +27,13 @@ export function PeriodFilterBar({ value, onChange, className, rightAction }: Per
   const { periodType, selectedDate, selectedWeekStart, selectedMonth, selectedYear, selectedQuarter } = value
   const { label: activePeriodLabel } = getPeriodRange(value)
 
-  const baseYear = value.selectedYear || 2026
-  const yearOptions = [baseYear - 2, baseYear - 1, baseYear, baseYear + 1]
+  const MIN_YEAR = 2026
+  const currentSelectedYear = Math.max(MIN_YEAR, value.selectedYear || MIN_YEAR)
+  const maxYear = Math.max(currentSelectedYear + 2, 2030)
+  const yearOptions = Array.from(
+    { length: maxYear - MIN_YEAR + 1 },
+    (_, i) => MIN_YEAR + i
+  )
 
   const handlePeriodTypeChange = (type: FilterPeriodType) => {
     onChange({ ...value, periodType: type })
@@ -44,26 +51,34 @@ export function PeriodFilterBar({ value, onChange, className, rightAction }: Per
       onChange({ ...value, selectedWeekStart: formatYmd(d) })
     } else if (periodType === "bulanan") {
       let nextMonth = selectedMonth + direction
-      let nextYear = selectedYear
+      let nextYear = currentSelectedYear
       if (nextMonth < 1) {
-        nextMonth = 12
-        nextYear -= 1
+        if (nextYear <= MIN_YEAR) {
+          nextMonth = 1
+        } else {
+          nextMonth = 12
+          nextYear -= 1
+        }
       } else if (nextMonth > 12) {
         nextMonth = 1
         nextYear += 1
       }
-      onChange({ ...value, selectedMonth: nextMonth, selectedYear: nextYear })
+      onChange({ ...value, selectedMonth: nextMonth, selectedYear: Math.max(MIN_YEAR, nextYear) })
     } else if (periodType === "triwulan") {
       let nextQ = selectedQuarter + direction
-      let nextYear = selectedYear
+      let nextYear = currentSelectedYear
       if (nextQ < 1) {
-        nextQ = 4
-        nextYear -= 1
+        if (nextYear <= MIN_YEAR) {
+          nextQ = 1
+        } else {
+          nextQ = 4
+          nextYear -= 1
+        }
       } else if (nextQ > 4) {
         nextQ = 1
         nextYear += 1
       }
-      onChange({ ...value, selectedQuarter: nextQ, selectedYear: nextYear })
+      onChange({ ...value, selectedQuarter: nextQ, selectedYear: Math.max(MIN_YEAR, nextYear) })
     }
   }
 
@@ -156,12 +171,14 @@ export function PeriodFilterBar({ value, onChange, className, rightAction }: Per
           {periodType === "harian" && (
             <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
               <label className="text-[11px] font-semibold text-muted-foreground hidden md:inline">Pilih Tanggal:</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => onChange({ ...value, selectedDate: e.target.value })}
-                className="h-8.5 px-2.5 sm:px-3 w-full sm:w-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#512da8]"
-              />
+              <div className="w-full sm:w-40">
+                <AppDatePicker
+                  value={selectedDate}
+                  onChange={(newDate) => onChange({ ...value, selectedDate: newDate })}
+                  size="sm"
+                  aria-label="Pilih Tanggal"
+                />
+              </div>
             </div>
           )}
 
@@ -169,74 +186,84 @@ export function PeriodFilterBar({ value, onChange, className, rightAction }: Per
           {periodType === "mingguan" && (
             <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
               <label className="text-[11px] font-semibold text-muted-foreground hidden md:inline">Mulai Senin:</label>
-              <input
-                type="date"
-                value={selectedWeekStart}
-                onChange={(e) => {
-                  const picked = parseAnyDate(e.target.value) || new Date()
-                  const monday = getMondayOfWeek(picked)
-                  onChange({ ...value, selectedWeekStart: formatYmd(monday) })
-                }}
-                className="h-8.5 px-2.5 sm:px-3 w-full sm:w-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#512da8]"
-              />
+              <div className="w-full sm:w-40">
+                <AppDatePicker
+                  value={selectedWeekStart}
+                  onChange={(newDate) => {
+                    const picked = parseAnyDate(newDate) || new Date()
+                    const monday = getMondayOfWeek(picked)
+                    onChange({ ...value, selectedWeekStart: formatYmd(monday) })
+                  }}
+                  size="sm"
+                  aria-label="Mulai Hari Senin"
+                />
+              </div>
             </div>
           )}
 
           {/* 3. KONTROL BULANAN */}
           {periodType === "bulanan" && (
             <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
-              <select
-                value={selectedMonth}
-                onChange={(e) => onChange({ ...value, selectedMonth: Number(e.target.value) })}
-                className="h-8.5 px-2 sm:px-3 flex-1 sm:flex-initial rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#512da8] cursor-pointer"
-              >
-                {MONTH_NAMES_ID.map((name, idx) => (
-                  <option key={name} value={idx + 1}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+              <div className="w-28 sm:w-32">
+                <AppSelect
+                  size="sm"
+                  value={String(selectedMonth)}
+                  onChange={(val) => onChange({ ...value, selectedMonth: Number(val) })}
+                  options={MONTH_NAMES_ID.map((name, idx) => ({
+                    value: String(idx + 1),
+                    label: name,
+                  }))}
+                  headerTitle="Pilih Bulan"
+                  aria-label="Pilih Bulan"
+                />
+              </div>
 
-              <select
-                value={selectedYear}
-                onChange={(e) => onChange({ ...value, selectedYear: Number(e.target.value) })}
-                className="h-8.5 px-2 sm:px-3 w-20 sm:w-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#512da8] cursor-pointer"
-              >
-                {yearOptions.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+              <div className="w-20 sm:w-24">
+                <AppSelect
+                  size="sm"
+                  value={String(currentSelectedYear)}
+                  onChange={(val) => onChange({ ...value, selectedYear: Number(val) })}
+                  options={yearOptions.map((y) => ({
+                    value: String(y),
+                    label: String(y),
+                  }))}
+                  headerTitle="Pilih Tahun"
+                  aria-label="Pilih Tahun"
+                />
+              </div>
             </div>
           )}
 
           {/* 4. KONTROL TRIWULAN */}
           {periodType === "triwulan" && (
             <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
-              <select
-                value={selectedQuarter}
-                onChange={(e) => onChange({ ...value, selectedQuarter: Number(e.target.value) })}
-                className="h-8.5 px-2 sm:px-3 flex-1 sm:flex-initial rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#512da8] cursor-pointer"
-              >
-                {QUARTER_NAMES_ID.map((q) => (
-                  <option key={q.q} value={q.q}>
-                    {q.label}
-                  </option>
-                ))}
-              </select>
+              <div className="w-28 sm:w-32">
+                <AppSelect
+                  size="sm"
+                  value={String(selectedQuarter)}
+                  onChange={(val) => onChange({ ...value, selectedQuarter: Number(val) })}
+                  options={QUARTER_NAMES_ID.map((q) => ({
+                    value: String(q.q),
+                    label: q.label,
+                  }))}
+                  headerTitle="Pilih Triwulan"
+                  aria-label="Pilih Triwulan"
+                />
+              </div>
 
-              <select
-                value={selectedYear}
-                onChange={(e) => onChange({ ...value, selectedYear: Number(e.target.value) })}
-                className="h-8.5 px-2 sm:px-3 w-20 sm:w-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#512da8] cursor-pointer"
-              >
-                {yearOptions.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+              <div className="w-20 sm:w-24">
+                <AppSelect
+                  size="sm"
+                  value={String(currentSelectedYear)}
+                  onChange={(val) => onChange({ ...value, selectedYear: Number(val) })}
+                  options={yearOptions.map((y) => ({
+                    value: String(y),
+                    label: String(y),
+                  }))}
+                  headerTitle="Pilih Tahun"
+                  aria-label="Pilih Tahun"
+                />
+              </div>
             </div>
           )}
 

@@ -100,3 +100,29 @@ export function calculateMinutesDifference(startStr: string, endStr: string): nu
   return diff
 }
 
+export function getIsoDateString(d: Date = new Date()): string {
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+export function convertIsoDateToId(isoStr: string): string {
+  if (!isoStr) return getFormattedDate(new Date())
+  const parts = isoStr.split("-")
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`
+  }
+  return isoStr
+}
+
+export function convertIdDateToIso(idDateStr: string): string {
+  if (!idDateStr) return getIsoDateString()
+  const parts = idDateStr.split("-")
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`
+  }
+  return idDateStr
+}
+
+

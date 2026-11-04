@@ -327,7 +327,7 @@ export function ModalMasterAlatForm({
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 cursor-pointer"
                     >
                       <Plus className="size-3" />
-                      <span>+ Tambah Lokasi Pemasangan</span>
+                      <span>Tambah Lokasi Pemasangan</span>
                     </button>
                   )}
                 </div>

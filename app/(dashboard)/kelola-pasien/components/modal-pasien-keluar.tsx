@@ -3,6 +3,7 @@
 import * as React from "react"
 import { LogOut } from "lucide-react"
 import { AppModal } from "@/components/app-modal"
+import { AppSelect } from "@/components/ui/app-select"
 import { DatePicker } from "@/components/date-picker"
 import { type Patient } from "@/lib/types/patient"
 
@@ -58,20 +59,21 @@ export function ModalPasienKeluar({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-              Alasan / Status Pemulangan <span className="text-red-500">*</span>
-            </label>
-            <select
+            <AppSelect
+              label="Alasan / Status Pemulangan"
+              required
               value={dischargeReason}
-              onChange={(e) => setDischargeReason(e.target.value)}
-              className="w-full text-xs sm:text-sm border rounded-lg px-3 py-2 bg-background border-border focus:outline-[#512da8]"
-            >
-              <option value="Boleh Pulang (Sembuh)">Boleh Pulang (BLPL / Sembuh)</option>
-              <option value="Pindah Ruang Rawat Inap">Pindah Ruang Rawat Inap Biasa</option>
-              <option value="Rujuk ke RS Lain">Rujuk ke Rumah Sakit Lain</option>
-              <option value="Pulang Atas Permintaan Sendiri">Pulang Atas Permintaan Sendiri (APS)</option>
-              <option value="Meninggal Dunia">Meninggal Dunia</option>
-            </select>
+              onChange={(val) => setDischargeReason(val)}
+              options={[
+                { value: "Boleh Pulang (Sembuh)", label: "Boleh Pulang (BLPL / Sembuh)", description: "Persetujuan dokter DPJP" },
+                { value: "Pindah Ruang Rawat Inap", label: "Pindah Ruang Rawat Inap Biasa", description: "Kondisi stabil, alih rawat inap" },
+                { value: "Rujuk ke RS Lain", label: "Rujuk ke Rumah Sakit Lain", description: "Perlu fasilitas khusus lanjutan" },
+                { value: "Pulang Atas Permintaan Sendiri", label: "Pulang Atas Permintaan Sendiri (APS)", description: "Penolakan rawat oleh keluarga" },
+                { value: "Meninggal Dunia", label: "Meninggal Dunia", description: "Dinyatakan henti nafas & jantung" },
+              ]}
+              headerTitle="Status Pemulangan Pasien"
+              aria-label="Alasan / Status Pemulangan"
+            />
           </div>
 
           <div>

@@ -139,7 +139,7 @@ export function getCurrentClientPeriodFilterState(): PeriodFilterState {
     selectedDate: formatYmd(now),
     selectedWeekStart: formatYmd(monday),
     selectedMonth: month,
-    selectedYear: now.getFullYear(),
+    selectedYear: Math.max(2026, now.getFullYear()),
     selectedQuarter: quarter,
   }
 }

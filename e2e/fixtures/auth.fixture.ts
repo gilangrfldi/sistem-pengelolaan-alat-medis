@@ -58,6 +58,13 @@ export const MOCK_MASTER_TOOLS = [
     total_units: 0,
     has_unit_number: false,
   },
+  {
+    id: "mt-5",
+    name: "Alat Cek Gula Darah (GDS)",
+    category: "kali",
+    total_units: 0,
+    has_unit_number: false,
+  },
 ]
 
 export const MOCK_DEFAULT_PATIENTS = [

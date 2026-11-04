@@ -2,13 +2,7 @@
 
 import * as React from "react"
 import { DatePicker } from "@/components/date-picker"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { AppSelect } from "@/components/ui/app-select"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export function BerandaFilters() {
@@ -19,24 +13,25 @@ export function BerandaFilters() {
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <DatePicker date={selectedDate} onDateChange={setSelectedDate} />
+      <div className="w-52">
+        <DatePicker date={selectedDate} onDateChange={setSelectedDate} />
+      </div>
 
-      <Select
-        value={shift}
-        onValueChange={(val) => {
-          if (val) setShift(val)
-        }}
-      >
-        <SelectTrigger className="w-48 h-9 text-xs sm:text-sm">
-          <SelectValue placeholder="Pilih Shift" />
-        </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false} align="start" className="w-48 min-w-48">
-          <SelectItem value="Semua">Semua Shift</SelectItem>
-          <SelectItem value="Pagi">Pagi (07.00 - 14.00)</SelectItem>
-          <SelectItem value="Siang">Siang (14.00 - 21.00)</SelectItem>
-          <SelectItem value="Malam">Malam (21.00 - 07.00)</SelectItem>
-        </SelectContent>
-      </Select>
+      <div className="w-48">
+        <AppSelect
+          value={shift}
+          onChange={(val) => setShift(val)}
+          options={[
+            { value: "Semua", label: "Semua Shift", description: "24 Jam Operasional" },
+            { value: "Pagi", label: "Pagi (07.00 - 14.00)", description: "Shift 1" },
+            { value: "Siang", label: "Siang (14.00 - 21.00)", description: "Shift 2" },
+            { value: "Malam", label: "Malam (21.00 - 07.00)", description: "Shift 3" },
+          ]}
+          headerTitle="Pilihan Shift"
+          placeholder="Pilih Shift"
+          aria-label="Pilih Shift"
+        />
+      </div>
     </div>
   )
 }
@@ -44,9 +39,8 @@ export function BerandaFilters() {
 export function BerandaFiltersSkeleton() {
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <Skeleton className="h-9 w-[200px]" />
-      <Skeleton className="h-9 w-36" />
+      <Skeleton className="h-10 w-[200px] rounded-xl" />
+      <Skeleton className="h-10 w-48 rounded-xl" />
     </div>
   )
 }
-

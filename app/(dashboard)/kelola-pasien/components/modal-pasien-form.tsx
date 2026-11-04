@@ -6,6 +6,7 @@ import { cn } from "cn"
 import { AppModal } from "@/components/app-modal"
 import { BedSelector } from "@/components/bed-selector"
 import { DatePicker } from "@/components/date-picker"
+import { AppTimePicker } from "@/components/ui/app-time-picker"
 import { type Patient, type CareLevel } from "@/lib/types/patient"
 
 export type PatientTitle = "Tn." | "Ny." | "An."
@@ -197,7 +198,7 @@ export function ModalPasienForm({
             type="text"
             inputMode="numeric"
             maxLength={10}
-            placeholder="Contoh: 0102098 (maks 10 digit)"
+            placeholder="Contoh: 0102098"
             value={formRm}
             onChange={(e) => setFormRm(e.target.value.replace(/\D/g, "").slice(0, 10))}
             className="w-full text-xs sm:text-sm border rounded-lg px-3 py-2 bg-background border-border focus:outline-[#512da8] font-mono"
@@ -214,20 +215,21 @@ export function ModalPasienForm({
             </label>
             <span className="text-[10px] text-muted-foreground font-mono">WIB</span>
           </div>
-          <div className="grid grid-cols-5 gap-2">
-            <div className="col-span-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
               <DatePicker
                 date={formAdmissionDateObj}
                 onDateChange={setFormAdmissionDateObj}
                 className="w-full justify-start text-xs sm:text-sm"
               />
             </div>
-            <div className="col-span-2">
-              <input
-                type="time"
+            <div>
+              <AppTimePicker
                 value={formAdmissionTime}
-                onChange={(e) => setFormAdmissionTime(e.target.value)}
-                className="w-full h-9 text-xs sm:text-sm border rounded-lg px-2.5 py-1.5 bg-background border-border focus:outline-[#512da8] font-mono text-center"
+                onChange={(val) => setFormAdmissionTime(val)}
+                placeholder="Jam masuk"
+                size="md"
+                aria-label="Jam Masuk HCU"
               />
             </div>
           </div>

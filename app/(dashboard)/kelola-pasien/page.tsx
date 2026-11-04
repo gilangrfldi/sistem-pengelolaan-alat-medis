@@ -22,6 +22,7 @@ import {
 import { cn } from "cn"
 import { StatsSection, StatItem } from "@/components/stats-section"
 import { PaginatedTable, TableColumn } from "@/components/paginated-table"
+import { AppSelect } from "@/components/ui/app-select"
 import { format, parse } from "date-fns"
 import { ModalPasienForm } from "./components/modal-pasien-form"
 import { ModalPasienKeluar } from "./components/modal-pasien-keluar"
@@ -911,18 +912,21 @@ function KelolaPasienContent() {
               />
             </div>
 
-            <div className="flex items-center gap-1.5 border rounded-lg px-2 sm:px-2.5 h-9 text-xs sm:text-sm bg-background border-border shrink-0">
-              <Filter className="size-3.5 text-muted-foreground shrink-0" />
-              <select
+            <div className="w-full sm:w-48 shrink-0">
+              <AppSelect
                 value={filterCare}
-                onChange={(e) => setFilterCare(e.target.value as "semua" | CareLevel)}
-                className="bg-transparent border-none outline-none text-xs sm:text-sm cursor-pointer"
-              >
-                <option value="semua">Semua Perawatan</option>
-                <option value="total">Perawatan Total</option>
-                <option value="parsial">Perawatan Parsial</option>
-                <option value="minimal">Perawatan Minimal</option>
-              </select>
+                onChange={(val) => setFilterCare(val as "semua" | CareLevel)}
+                size="sm"
+                icon={<Filter className="size-3.5 text-muted-foreground shrink-0" />}
+                options={[
+                  { value: "semua", label: "Semua Perawatan", description: "Seluruh tingkat perawatan" },
+                  { value: "total", label: "Perawatan Total", description: "Bantuan total / bed rest" },
+                  { value: "parsial", label: "Perawatan Parsial", description: "Bantuan sebagian" },
+                  { value: "minimal", label: "Perawatan Minimal", description: "Mandiri dengan observasi" },
+                ]}
+                headerTitle="Filter Perawatan"
+                aria-label="Filter Perawatan"
+              />
             </div>
           </div>
         </div>

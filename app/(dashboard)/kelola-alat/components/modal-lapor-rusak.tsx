@@ -4,6 +4,7 @@ import * as React from "react"
 import { Wrench, AlertCircle } from "lucide-react"
 import { cn } from "cn"
 import { AppModal } from "@/components/app-modal"
+import { AppSelect } from "@/components/ui/app-select"
 import { type MasterTool, type DamagedToolRecord } from "@/lib/types/tool"
 
 interface ModalLaporRusakProps {
@@ -72,28 +73,29 @@ export function ModalLaporRusak({
 
       <div className="space-y-3.5">
         <div>
-          <label className="block text-xs font-semibold mb-1">Pilih Alat Rusak *</label>
-          <select
+          <AppSelect
+            label="Pilih Alat Rusak"
+            required
             value={dmgSelectedTool}
-            onChange={(e) => {
-              setDmgSelectedTool(e.target.value)
+            onChange={(val) => {
+              setDmgSelectedTool(val)
               setDmgSelectedNumbers([])
               setDmgQuantity(1)
               setDmgError(null)
             }}
-            className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background cursor-pointer"
-          >
-            {masterTools.map((m) => (
-              <option key={m.id} value={m.name}>
-                {m.name}{" "}
-                {m.hasUnitNumber
+            options={masterTools.map((m) => ({
+              value: m.name,
+              label: `${m.name} ${
+                m.hasUnitNumber
                   ? `(Unit #${m.unitStartNumber || 1}-${m.unitEndNumber || m.totalUnits})`
                   : m.totalUnits > 0
                   ? `(${m.totalUnits} unit)`
-                  : ""}
-              </option>
-            ))}
-          </select>
+                  : ""
+              }`,
+            }))}
+            headerTitle="Daftar Master Alat"
+            aria-label="Pilih Alat Rusak"
+          />
         </div>
 
         {/* Kondisi Dinamis Form Lapor Rusak Berdasarkan Jenis Master Tool */}
@@ -232,19 +234,17 @@ export function ModalLaporRusak({
         })()}
 
         <div>
-          <label className="block text-xs font-semibold mb-1">Tingkat Kerusakan</label>
-          <select
+          <AppSelect
+            label="Tingkat Kerusakan"
             value={dmgSeverity}
-            onChange={(e) =>
-              setDmgSeverity(
-                e.target.value as "rusak_ringan" | "rusak_berat"
-              )
-            }
-            className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background cursor-pointer"
-          >
-            <option value="rusak_ringan">Rusak Ringan</option>
-            <option value="rusak_berat">Rusak Berat</option>
-          </select>
+            onChange={(val) => setDmgSeverity(val as "rusak_ringan" | "rusak_berat")}
+            options={[
+              { value: "rusak_ringan", label: "Rusak Ringan", description: "Fungsi parsial, butuh servis ringan" },
+              { value: "rusak_berat", label: "Rusak Berat", description: "Tidak dapat beroperasi, perlu teknisi total" },
+            ]}
+            headerTitle="Tingkat Kerusakan"
+            aria-label="Tingkat Kerusakan"
+          />
         </div>
 
         <div>

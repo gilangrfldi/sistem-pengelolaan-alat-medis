@@ -111,7 +111,12 @@ test.describe("CUJ-4: Kelola Alat Medis - Frekuensi Tindakan (Hitungan Kali)", (
     await authedPage.locator("button:has-text('Pasang Alat di Bed Ini')").first().click()
     await authedPage.getByRole("button", { name: "Hitungan Kali", exact: true }).click()
 
-    // Verifikasi input jam tindakan langsung tampil (default jam sekarang & bisa diedit)
+    // Verifikasi input tanggal di sebelah kiri dan input jam tindakan langsung tampil (default jam sekarang & bisa diedit)
+    const dateInput = authedPage.locator("input[type='date']").first()
+    await expect(dateInput).toBeVisible()
+    const todayDateVal = await dateInput.inputValue()
+    expect(todayDateVal).toBeTruthy()
+
     const timeInput = authedPage.locator("input[type='time']").first()
     await expect(timeInput).toBeVisible()
     await expect(authedPage.getByRole("button", { name: /Sesuai Jam Masuk/i })).toBeVisible()
@@ -128,5 +133,31 @@ test.describe("CUJ-4: Kelola Alat Medis - Frekuensi Tindakan (Hitungan Kali)", (
     // Verifikasi jam tindakan yang diedit muncul pada panel bed
     const bedPanel = authedPage.locator("#detail-bed-panel")
     await expect(bedPanel.getByText("14:30 WIB").first()).toBeVisible()
+  })
+
+  test("Pencarian Alat Medis (Hitungan Kali) melalui Searchable Dropdown", async ({ authedPage }) => {
+    await authedPage.goto("/kelola-alat")
+    await expect(authedPage.getByText("Tn. Joko Widodo (Pasien Tes 1)").first()).toBeVisible({ timeout: 10000 })
+
+    await authedPage.locator("button:has-text('Pasang Alat di Bed Ini')").first().click()
+    await authedPage.getByRole("button", { name: "Hitungan Kali", exact: true }).click()
+
+    // Ketik pada dropdown combobox untuk mencari alat medis
+    const toolInput = authedPage.locator("input[data-slot='combobox-tool-input']").first()
+    await expect(toolInput).toBeVisible()
+    await toolInput.click()
+    await toolInput.fill("GDS")
+
+    // Klik hasil pencarian 'Alat Cek Gula Darah (GDS)'
+    const option = authedPage.getByRole("button", { name: /Alat Cek Gula Darah \(GDS\)/i }).first()
+    await expect(option).toBeVisible()
+    await option.click()
+
+    // Simpan alat tindakan
+    await authedPage.getByRole("button", { name: "Simpan & Pasang Alat" }).click()
+    await expect(authedPage.getByRole("heading", { name: "Catat & Pasang Alat Medis HCU" })).not.toBeVisible()
+
+    const bedPanel = authedPage.locator("#detail-bed-panel")
+    await expect(bedPanel.getByText(/Alat Cek Gula Darah/i).first()).toBeVisible()
   })
 })

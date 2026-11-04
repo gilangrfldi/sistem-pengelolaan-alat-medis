@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PeriodFilterBar } from "@/components/period-filter-bar"
+import { AppSelect } from "@/components/ui/app-select"
 import {
   PeriodFilterState,
   getInitialPeriodFilterState,
@@ -555,18 +556,21 @@ export default function RekapPasienPage() {
               />
             </div>
 
-            <div className="flex items-center gap-1.5 border rounded-lg px-2 sm:px-2.5 h-9 text-xs sm:text-sm bg-background border-border shrink-0">
-              <Filter className="size-3.5 text-muted-foreground shrink-0" />
-              <select
+            <div className="w-full sm:w-48 shrink-0">
+              <AppSelect
                 value={careFilter}
-                onChange={(e) => setCareFilter(e.target.value as "semua" | "total" | "parsial" | "minimal")}
-                className="bg-transparent border-none outline-none text-xs sm:text-sm cursor-pointer"
-              >
-                <option value="semua">Semua Perawatan</option>
-                <option value="total">Perawatan Total</option>
-                <option value="parsial">Perawatan Parsial</option>
-                <option value="minimal">Perawatan Minimal</option>
-              </select>
+                onChange={(val) => setCareFilter(val as "semua" | "total" | "parsial" | "minimal")}
+                size="sm"
+                icon={<Filter className="size-3.5 text-muted-foreground shrink-0" />}
+                options={[
+                  { value: "semua", label: "Semua Perawatan", description: "Seluruh tingkat perawatan" },
+                  { value: "total", label: "Perawatan Total", description: "Bantuan total / bed rest" },
+                  { value: "parsial", label: "Perawatan Parsial", description: "Bantuan sebagian" },
+                  { value: "minimal", label: "Perawatan Minimal", description: "Mandiri dengan observasi" },
+                ]}
+                headerTitle="Filter Perawatan"
+                aria-label="Filter Perawatan"
+              />
             </div>
 
             {(searchTerm || careFilter !== "semua") && (
