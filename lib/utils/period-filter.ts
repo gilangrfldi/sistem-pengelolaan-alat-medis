@@ -98,16 +98,6 @@ export function formatYmd(d: Date): string {
 }
 
 /**
- * Format Date ke string "DD-MM-YYYY"
- */
-export function formatDmy(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${day}-${m}-${y}`
-}
-
-/**
  * Mengambil tanggal awal minggu (Senin) dari suatu tanggal
  */
 export function getMondayOfWeek(d: Date): Date {

@@ -33,8 +33,11 @@ export default function DashboardLayout({
             />
             <DynamicBreadcrumb />
           </div>
-          <div className="hidden sm:flex items-center text-xs text-white/70 font-medium tracking-wide">
-            Sistem Pengelolaan Alat Medis Ruang HCU
+          <div className="hidden md:flex items-center text-xs text-white/70 font-medium tracking-wide">
+            SITA - MED: Sistem Inventarisasi & Tracking Alat Medis
+          </div>
+          <div className="flex md:hidden items-center text-xs text-white/80 font-bold tracking-wide">
+            SITA MED
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-4">

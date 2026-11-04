@@ -1,6 +1,5 @@
 "use client"
 
-import * as React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -34,20 +33,8 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { performLogout } from "@/lib/services/auth-service"
-
-// Fungsi Helper: Mengambil inisial nama pertama dan kedua
-// Contoh: "Budi Santoso" -> "BS", "Budi Santoso Putra" -> "BS", "Budi" -> "BU"
-export function getInitials(name: string): string {
-  if (!name) return "US"
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase()
-  }
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase()
-  }
-  return "US"
-}
+import { getInitials } from "@/lib/utils"
+export { getInitials }
 
 interface NavUserProps {
   user?: {
@@ -200,6 +187,7 @@ export function NavUser({ user }: NavUserProps) {
         <SidebarMenuItem>
           <DropdownMenu>
             <DropdownMenuTrigger
+              data-testid="user-menu-trigger"
               render={
                 <SidebarMenuButton
                   size="lg"
@@ -312,6 +300,7 @@ export function NavUser({ user }: NavUserProps) {
               </DropdownMenuGroup>
 
               <DropdownMenuItem
+                data-testid="logout-button"
                 onClick={handleLogout}
                 className="cursor-pointer text-destructive focus:text-destructive"
               >

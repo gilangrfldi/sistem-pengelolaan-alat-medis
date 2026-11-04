@@ -3,7 +3,8 @@
 import * as React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Activity, KeyRound, Eye, EyeOff, AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react"
+import Image from "next/image"
+import { KeyRound, Eye, EyeOff, AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 export default function ResetPasswordPage() {
@@ -85,13 +86,19 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#e8ecf4] dark:bg-neutral-950 p-4 sm:p-6 transition-colors">
       {/* Brand Header */}
       <div className="mb-6 flex items-center gap-2.5 text-neutral-800 dark:text-neutral-200">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-[#512da8] text-white shadow-sm">
-          <Activity className="size-4" />
+        <div className="flex size-9 items-center justify-center rounded-lg bg-white overflow-hidden shadow-sm border border-neutral-200 dark:border-neutral-700">
+          <Image
+            src="/logo.jpeg"
+            alt="Logo SITA MED"
+            width={36}
+            height={36}
+            className="size-full object-cover"
+          />
         </div>
         <div className="flex flex-col">
-          <span className="font-bold text-sm tracking-tight">RSUD Welas Asih</span>
+          <span className="font-bold text-sm tracking-tight">SITA MED</span>
           <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
-            Sistem Pengelolaan Alat Medis Ruang HCU
+            Sistem Inventarisasi & Tracking Alat Medis
           </span>
         </div>
       </div>
@@ -217,7 +224,7 @@ export default function ResetPasswordPage() {
 
       {/* Footer Info */}
       <div className="mt-6 text-center text-xs text-neutral-400 dark:text-neutral-500">
-        © 2026 RSUD Welas Asih • Sistem Informasi Pemantauan & Kalibrasi Alat Medis HCU
+        © 2026 SITA MED • Sistem Inventarisasi & Tracking Alat Medis HCU RSUD Welas Asih
       </div>
     </div>
   )

@@ -14,19 +14,17 @@ import {
   Edit2,
   Calendar as CalendarIcon,
   UserCheck,
-  AlertCircle,
   Sun,
   SunMedium,
   Moon,
   History,
 } from "lucide-react"
 import { cn } from "cn"
-import { DatePicker } from "@/components/date-picker"
 import { StatsSection, StatItem } from "@/components/stats-section"
-import { AppModal } from "@/components/app-modal"
 import { PaginatedTable, TableColumn } from "@/components/paginated-table"
-import { BedSelector } from "@/components/bed-selector"
 import { format, parse } from "date-fns"
+import { ModalPasienForm } from "./components/modal-pasien-form"
+import { ModalPasienKeluar } from "./components/modal-pasien-keluar"
 import {
   fetchPatientsFromDb,
   insertPatientInDb,
@@ -34,52 +32,23 @@ import {
 } from "@/lib/services/pasien-service"
 import { releaseToolsForBed } from "@/lib/services/alat-service"
 import { toast } from "@/components/ui/app-toast"
+import { REGULAR_BEDS, ISOLATION_BEDS, ALL_BEDS } from "@/lib/constants/beds"
+import {
+  type Patient,
+  type CareLevel,
+  type ShiftHistoryRecord,
+} from "@/lib/types/patient"
+import {
+  type ShiftType,
+  type ShiftInfo,
+  getShiftInfo,
+  getFormattedDate,
+  getFormattedTime,
+} from "@/lib/utils/date-time"
 
-// Daftar 21 Bed Ruang HCU (19 Bed Reguler + 2 Isolasi)
-export const REGULAR_BEDS = Array.from({ length: 19 }, (_, i) => `Bed ${String(i + 1).padStart(2, "0")}`)
-export const ISOLATION_BEDS = ["Isolasi 1", "Isolasi 2"]
-export const ALL_BEDS = [...REGULAR_BEDS, ...ISOLATION_BEDS]
-
-export type CareLevel = "total" | "parsial" | "minimal"
-export type ShiftType = "pagi" | "siang" | "malam"
-
-export interface ShiftInfo {
-  type: ShiftType
-  name: string
-  label: string
-  timeRange: string
-  nextShiftTime: string
-  shiftKey: string
-}
-
-export interface Patient {
-  id: string
-  name: string
-  gender: "L" | "P"
-  rm: string
-  bed: string
-  careLevel: CareLevel
-  admissionDate: string // Format: DD-MM-YYYY
-  admissionTime: string
-  admissionShiftKey: string
-  nurseName: string
-  status: "aktif" | "keluar"
-  dischargeDate?: string
-  dischargeTime?: string
-  dischargeShiftKey?: string
-  dischargeReason?: string
-}
-
-export interface ShiftHistoryRecord {
-  id: string
-  shiftName: string
-  dateLabel: string
-  timeRange: string
-  awal: number
-  masuk: number
-  keluar: number
-  akhir: number
-}
+export { REGULAR_BEDS, ISOLATION_BEDS, ALL_BEDS }
+export type { CareLevel, ShiftType, ShiftInfo, Patient, ShiftHistoryRecord }
+export { getShiftInfo }
 
 // Data awal pasien HCU
 const initialPatients: Patient[] = []
@@ -824,6 +793,7 @@ function KelolaPasienContent() {
           {/* Tombol Registrasi Pasien Masuk */}
           <button
             type="button"
+            data-testid="btn-pasien-masuk"
             onClick={handleOpenAddModal}
             className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#512da8] hover:bg-[#43238c] text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md"
           >
@@ -978,551 +948,72 @@ function KelolaPasienContent() {
       </div>
 
       {/* ======================================================== */}
-      {/* MODAL: REGISTRASI PASIEN MASUK (TEMPLATE APPMODAL) */}
+      {/* MODAL: REGISTRASI PASIEN MASUK */}
       {/* ======================================================== */}
-      <AppModal
+      <ModalPasienForm
+        mode="add"
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        title="Registrasi Pasien Masuk HCU"
-        subtitle={
-          <span>
-            Perawat Penginput: <strong className="text-foreground">{currentNurse}</strong>
-          </span>
-        }
-        icon={<UserPlus className="size-5" />}
+        currentNurse={currentNurse}
+        formError={formError}
+        formBed={formBed}
+        setFormBed={setFormBed}
+        occupiedBedMap={occupiedBedMap}
+        formTitle={formTitle}
+        setFormTitle={setFormTitle}
+        formRawName={formRawName}
+        setFormRawName={setFormRawName}
+        formRm={formRm}
+        setFormRm={setFormRm}
+        formAdmissionDateObj={formAdmissionDateObj}
+        setFormAdmissionDateObj={setFormAdmissionDateObj}
+        formAdmissionTime={formAdmissionTime}
+        setFormAdmissionTime={setFormAdmissionTime}
+        formCareLevel={formCareLevel}
+        setFormCareLevel={setFormCareLevel}
         onSubmit={handleSubmitAddPatient}
-        submitText="Simpan Pasien Masuk"
-        maxWidth="2xl"
-      >
-        {formError && (
-          <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-900/50">
-            <AlertCircle className="size-4 shrink-0" />
-            <span>{formError}</span>
-          </div>
-        )}
-
-        {/* Denah Pemilihan Bed Sesuai Standar Kelola Alat */}
-        <BedSelector
-          title="Pilih Bed Pasien"
-          required
-          selectedBed={formBed}
-          onSelectBed={setFormBed}
-          isBedDisabled={(bed) => occupiedBedMap.has(bed)}
-          isBedOccupied={(bed) => occupiedBedMap.has(bed)}
-          occupiedStyle="muted"
-          legendLabels={{
-            available: "Tersedia",
-            occupied: "Terisi",
-            selected: "Pilihan Anda",
-          }}
-          bedStatusTexts={{
-            available: "Tersedia",
-            disabled: "Terisi",
-            selected: "Pilihan",
-          }}
-          getBedTooltip={(bed, { isDisabled }) => {
-            const occupant = occupiedBedMap.get(bed)
-            return isDisabled
-              ? `${bed}: Terisi (${occupant?.name ?? ""} - ${occupant?.rm ?? ""})`
-              : `${bed}: Tersedia`
-          }}
-        />
-
-        {/* Kategori & Panggilan Pasien */}
-        <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-            Kategori & Panggilan Pasien <span className="text-red-500">*</span>
-          </label>
-
-          <div className="grid grid-cols-3 gap-2 mb-2">
-            <button
-              type="button"
-              onClick={() => setFormTitle("Tn.")}
-              className={cn(
-                "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer text-center",
-                formTitle === "Tn."
-                  ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                  : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-              )}
-            >
-              Tn. (Laki-laki)
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormTitle("Ny.")}
-              className={cn(
-                "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer text-center",
-                formTitle === "Ny."
-                  ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                  : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-              )}
-            >
-              Ny. (Perempuan)
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormTitle("An.")}
-              className={cn(
-                "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer text-center",
-                formTitle === "An."
-                  ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                  : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-              )}
-            >
-              An. (Anak-anak)
-            </button>
-          </div>
-
-          <div className="flex rounded-lg border border-border overflow-hidden focus-within:ring-2 focus-within:ring-[#512da8]/30 focus-within:border-[#512da8]">
-            <div className="bg-neutral-100 dark:bg-neutral-800 px-3.5 py-2 text-xs sm:text-sm font-bold text-neutral-800 dark:text-neutral-200 border-r border-border flex items-center select-none">
-              {formTitle}
-            </div>
-            <input
-              type="text"
-              placeholder="Nama lengkap pasien..."
-              value={formRawName}
-              onChange={(e) => setFormRawName(e.target.value)}
-              className="flex-1 px-3 py-2 text-xs sm:text-sm bg-background border-none outline-none text-foreground placeholder:text-muted-foreground"
-            />
-          </div>
-        </div>
-
-        {/* No. RM (HANYA ANGKA, MAKS 10 DIGIT) & Tanggal Masuk (DatePicker Beranda) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                Nomor Rekam Medis (RM) <span className="text-red-500">*</span>
-              </label>
-              <span className="text-[10px] text-muted-foreground font-mono">
-                {formRm.length}/10 digit
-              </span>
-            </div>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={10}
-              placeholder="Contoh: 0102098 (maks 10 digit)"
-              value={formRm}
-              onChange={(e) => setFormRm(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              className="w-full text-xs sm:text-sm border rounded-lg px-3 py-2 bg-background border-border focus:outline-[#512da8] font-mono"
-            />
-            <span className="text-[10px] text-muted-foreground mt-0.5 block">
-              Maksimal 10 digit angka. No. RM pasien aktif tidak boleh sama.
-            </span>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                Tanggal & Jam Masuk HCU
-              </label>
-              <span className="text-[10px] text-muted-foreground font-mono">WIB</span>
-            </div>
-            <div className="grid grid-cols-5 gap-2">
-              <div className="col-span-3">
-                <DatePicker
-                  date={formAdmissionDateObj}
-                  onDateChange={setFormAdmissionDateObj}
-                  className="w-full justify-start text-xs sm:text-sm"
-                />
-              </div>
-              <div className="col-span-2">
-                <input
-                  type="time"
-                  value={formAdmissionTime}
-                  onChange={(e) => setFormAdmissionTime(e.target.value)}
-                  className="w-full h-9 text-xs sm:text-sm border rounded-lg px-2.5 py-1.5 bg-background border-border focus:outline-[#512da8] font-mono text-center"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Klasifikasi Tingkat Perawatan (Bahasa Indonesia) */}
-        <div>
-          <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-            Klasifikasi Tingkat Perawatan <span className="text-red-500">*</span>
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => setFormCareLevel("total")}
-              className={cn(
-                "py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer",
-                formCareLevel === "total"
-                  ? "bg-red-500 text-white border-red-600 shadow-xs"
-                  : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-              )}
-            >
-              Perawatan Total
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormCareLevel("parsial")}
-              className={cn(
-                "py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer",
-                formCareLevel === "parsial"
-                  ? "bg-amber-500 text-white border-amber-600 shadow-xs"
-                  : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-              )}
-            >
-              Perawatan Parsial
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormCareLevel("minimal")}
-              className={cn(
-                "py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer",
-                formCareLevel === "minimal"
-                  ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
-                  : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-              )}
-            >
-              Perawatan Minimal
-            </button>
-          </div>
-        </div>
-      </AppModal>
+      />
 
       {/* ======================================================== */}
-      {/* MODAL: KONFIRMASI PEMULANGAN PASIEN (TEMPLATE APPMODAL) */}
+      {/* MODAL: KONFIRMASI PEMULANGAN PASIEN */}
       {/* ======================================================== */}
-      <AppModal
-        isOpen={showDischargeModal && Boolean(selectedPatient)}
+      <ModalPasienKeluar
+        isOpen={showDischargeModal}
         onClose={() => setShowDischargeModal(false)}
-        title="Konfirmasi Pemulangan Pasien"
-        subtitle="Catat status kepulangan atau perpindahan ruangan pasien"
-        icon={<LogOut className="size-5" />}
-        iconClassName="bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300"
-        onSubmit={handleConfirmDischarge}
-        submitText="Konfirmasi Pulangkan"
-        submitVariant="danger"
-        maxWidth="md"
-      >
-        {selectedPatient && (
-          <>
-            <div className="p-3.5 bg-neutral-50 dark:bg-neutral-800/60 rounded-xl text-xs space-y-1.5 border border-neutral-100 dark:border-neutral-800">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Nama Pasien:</span>
-                <span className="font-bold text-neutral-900 dark:text-neutral-100">{selectedPatient.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">No. Rekam Medis:</span>
-                <span className="font-mono font-semibold">{selectedPatient.rm}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Bed Saat Ini:</span>
-                <span className="font-bold text-[#512da8] dark:text-purple-300">{selectedPatient.bed}</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-                Alasan / Status Pemulangan <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={dischargeReason}
-                onChange={(e) => setDischargeReason(e.target.value)}
-                className="w-full text-xs sm:text-sm border rounded-lg px-3 py-2 bg-background border-border focus:outline-[#512da8]"
-              >
-                <option value="Boleh Pulang (Sembuh)">Boleh Pulang (BLPL / Sembuh)</option>
-                <option value="Pindah Ruang Rawat Inap">Pindah Ruang Rawat Inap Biasa</option>
-                <option value="Rujuk ke RS Lain">Rujuk ke Rumah Sakit Lain</option>
-                <option value="Pulang Atas Permintaan Sendiri">Pulang Atas Permintaan Sendiri (APS)</option>
-                <option value="Meninggal Dunia">Meninggal Dunia</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-                Tanggal Pemulangan
-              </label>
-              <DatePicker
-                date={dischargeDateObj}
-                onDateChange={setDischargeDateObj}
-                className="w-full justify-start text-xs sm:text-sm"
-              />
-            </div>
-          </>
-        )}
-      </AppModal>
+        selectedPatient={selectedPatient}
+        dischargeReason={dischargeReason}
+        setDischargeReason={setDischargeReason}
+        dischargeDateObj={dischargeDateObj}
+        setDischargeDateObj={setDischargeDateObj}
+        onConfirm={handleConfirmDischarge}
+      />
 
       {/* ======================================================== */}
-      {/* MODAL: EDIT DATA PASIEN (TEMPLATE APPMODAL) */}
+      {/* MODAL: EDIT DATA PASIEN */}
       {/* ======================================================== */}
-      <AppModal
-        isOpen={showEditModal && Boolean(selectedPatient)}
+      <ModalPasienForm
+        mode="edit"
+        isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        title="Ubah Data Pasien"
-        subtitle="Perbarui nomor bed, klasifikasi perawatan, atau nomor rekam medis"
-        icon={<Edit2 className="size-5" />}
-        iconClassName="bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+        selectedPatient={selectedPatient}
+        formError={formError}
+        formBed={formBed}
+        setFormBed={setFormBed}
+        occupiedBedMap={occupiedBedMap}
+        formTitle={formTitle}
+        setFormTitle={setFormTitle}
+        formRawName={formRawName}
+        setFormRawName={setFormRawName}
+        formRm={formRm}
+        setFormRm={setFormRm}
+        formAdmissionDateObj={formAdmissionDateObj}
+        setFormAdmissionDateObj={setFormAdmissionDateObj}
+        formAdmissionTime={formAdmissionTime}
+        setFormAdmissionTime={setFormAdmissionTime}
+        formCareLevel={formCareLevel}
+        setFormCareLevel={setFormCareLevel}
         onSubmit={handleSubmitEdit}
-        submitText="Perbarui Data"
-        maxWidth="2xl"
-      >
-        {formError && (
-          <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-900/50">
-            <AlertCircle className="size-4 shrink-0" />
-            <span>{formError}</span>
-          </div>
-        )}
-
-        {selectedPatient && (
-          <>
-            {/* Denah Bed Sesuai Standar Kelola Alat untuk Pindah Bed */}
-            <BedSelector
-              title="Pindah Bed Pasien"
-              subtitle={
-                <span className="text-[11px] text-muted-foreground ml-2">
-                  (Saat ini: <strong className="text-[#512da8]">{selectedPatient.bed}</strong>)
-                </span>
-              }
-              selectedBed={formBed}
-              onSelectBed={setFormBed}
-              isBedDisabled={(bed) => occupiedBedMap.has(bed) && bed !== selectedPatient.bed}
-              isBedOccupied={(bed) => occupiedBedMap.has(bed) && bed !== selectedPatient.bed}
-              occupiedStyle="muted"
-              legendLabels={{
-                available: "Tersedia",
-                occupied: "Terisi",
-                selected: "Pilihan Anda",
-              }}
-              getBedStatusText={(bed, { isSelected, isDisabled }) => {
-                if (isSelected) return "Pilihan"
-                if (isDisabled) return "Terisi"
-                if (bed === selectedPatient.bed) return "Saat Ini"
-                return "Tersedia"
-              }}
-              getBedTooltip={(bed, { isDisabled }) => {
-                const occupant = occupiedBedMap.get(bed)
-                return isDisabled
-                  ? `${bed}: Terisi (${occupant?.name ?? ""} - ${occupant?.rm ?? ""})`
-                  : `${bed}: Tersedia`
-              }}
-            />
-
-            {/* Kategori & Panggilan Pasien */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                Kategori & Panggilan Pasien
-              </label>
-
-              <div className="grid grid-cols-3 gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setFormTitle("Tn.")}
-                  className={cn(
-                    "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer text-center",
-                    formTitle === "Tn."
-                      ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                      : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-                  )}
-                >
-                  Tn. (Laki-laki)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormTitle("Ny.")}
-                  className={cn(
-                    "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer text-center",
-                    formTitle === "Ny."
-                      ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                      : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-                  )}
-                >
-                  Ny. (Perempuan)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormTitle("An.")}
-                  className={cn(
-                    "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer text-center",
-                    formTitle === "An."
-                      ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                      : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-                  )}
-                >
-                  An. (Anak-anak)
-                </button>
-              </div>
-
-              <div className="flex rounded-lg border border-border overflow-hidden">
-                <div className="bg-neutral-100 dark:bg-neutral-800 px-3.5 py-2 text-xs sm:text-sm font-bold text-neutral-800 dark:text-neutral-200 border-r border-border flex items-center select-none">
-                  {formTitle}
-                </div>
-                <input
-                  type="text"
-                  value={formRawName}
-                  onChange={(e) => setFormRawName(e.target.value)}
-                  className="flex-1 px-3 py-2 text-xs sm:text-sm bg-background border-none outline-none text-foreground"
-                />
-              </div>
-            </div>
-
-            {/* RM (Hanya Angka, maks 10 digit) & Tanggal Masuk */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                    Nomor Rekam Medis (RM)
-                  </label>
-                  <span className="text-[10px] text-muted-foreground font-mono">
-                    {formRm.length}/10 digit
-                  </span>
-                </div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={10}
-                  value={formRm}
-                  onChange={(e) => setFormRm(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  className="w-full text-xs sm:text-sm border rounded-lg px-3 py-2 bg-background border-border font-mono"
-                />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                    Tanggal & Jam Masuk
-                  </label>
-                  <span className="text-[10px] text-muted-foreground font-mono">WIB</span>
-                </div>
-                <div className="grid grid-cols-5 gap-2">
-                  <div className="col-span-3">
-                    <DatePicker
-                      date={formAdmissionDateObj}
-                      onDateChange={setFormAdmissionDateObj}
-                      className="w-full justify-start text-xs sm:text-sm"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <input
-                      type="time"
-                      value={formAdmissionTime}
-                      onChange={(e) => setFormAdmissionTime(e.target.value)}
-                      className="w-full h-9 text-xs sm:text-sm border rounded-lg px-2.5 py-1.5 bg-background border-border focus:outline-[#512da8] font-mono text-center"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Klasifikasi Tingkat Perawatan (Bahasa Indonesia) */}
-            <div>
-              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-                Ubah Tingkat Perawatan
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFormCareLevel("total")}
-                  className={cn(
-                    "py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer",
-                    formCareLevel === "total"
-                      ? "bg-red-500 text-white border-red-600 shadow-xs"
-                      : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-                  )}
-                >
-                  Perawatan Total
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormCareLevel("parsial")}
-                  className={cn(
-                    "py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer",
-                    formCareLevel === "parsial"
-                      ? "bg-amber-500 text-white border-amber-600 shadow-xs"
-                      : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-                  )}
-                >
-                  Perawatan Parsial
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormCareLevel("minimal")}
-                  className={cn(
-                    "py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer",
-                    formCareLevel === "minimal"
-                      ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
-                      : "border-border text-muted-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800"
-                  )}
-                >
-                  Perawatan Minimal
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </AppModal>
+      />
     </div>
   )
-}
-
-// ========================================================
-// FUNGSI HELPER WAKTU & SHIFT RUANG HCU
-// ========================================================
-
-export function getShiftInfo(now: Date = new Date()): ShiftInfo {
-  const hours = now.getHours()
-  const minutes = now.getMinutes()
-  const timeVal = hours + minutes / 60
-
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, "0")
-  const d = String(now.getDate()).padStart(2, "0")
-  const dateStr = `${y}-${m}-${d}`
-
-  if (timeVal >= 7 && timeVal < 14) {
-    return {
-      type: "pagi",
-      name: "Pagi",
-      label: "Shift Pagi",
-      timeRange: "07.00 - 14.00 WIB",
-      nextShiftTime: "14.00 WIB",
-      shiftKey: `${dateStr}-pagi`,
-    }
-  } else if (timeVal >= 14 && timeVal < 21) {
-    return {
-      type: "siang",
-      name: "Siang",
-      label: "Shift Siang",
-      timeRange: "14.00 - 21.00 WIB",
-      nextShiftTime: "21.00 WIB",
-      shiftKey: `${dateStr}-siang`,
-    }
-  } else {
-    let shiftDateStr = dateStr
-    if (timeVal < 7) {
-      const yesterday = new Date(now)
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yy = yesterday.getFullYear()
-      const mm = String(yesterday.getMonth() + 1).padStart(2, "0")
-      const dd = String(yesterday.getDate()).padStart(2, "0")
-      shiftDateStr = `${yy}-${mm}-${dd}`
-    }
-
-    return {
-      type: "malam",
-      name: "Malam",
-      label: "Shift Malam",
-      timeRange: "21.00 - 07.00 WIB",
-      nextShiftTime: "07.00 WIB",
-      shiftKey: `${shiftDateStr}-malam`,
-    }
-  }
-}
-
-function getFormattedDate(d: Date): string {
-  const day = String(d.getDate()).padStart(2, "0")
-  const month = String(d.getMonth() + 1).padStart(2, "0")
-  const year = d.getFullYear()
-  return `${day}-${month}-${year}`
-}
-
-function getFormattedTime(d: Date): string {
-  const hh = String(d.getHours()).padStart(2, "0")
-  const mm = String(d.getMinutes()).padStart(2, "0")
-  const ss = String(d.getSeconds()).padStart(2, "0")
-  return `${hh}:${mm}:${ss}`
 }

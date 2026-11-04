@@ -573,7 +573,7 @@ export default function KelolaPerawatPage() {
                 <strong>{nurseToDelete?.fullName}</strong> ({nurseToDelete?.email})?
               </p>
               <p className="text-[11px] text-rose-700/80 dark:text-rose-400">
-                Akun yang dihapus tidak dapat lagi masuk ke dalam aplikasi sistem pengelolaan alat medis HCU.
+                Akun yang dihapus tidak dapat lagi masuk ke dalam aplikasi SITA MED.
               </p>
             </div>
           </div>

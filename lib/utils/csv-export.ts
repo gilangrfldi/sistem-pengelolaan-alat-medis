@@ -44,27 +44,6 @@ export function recordDownloadHistory(item: Omit<DownloadHistoryItem, "id" | "do
 }
 
 /**
- * Mengambil daftar riwayat unduhan
- */
-export function getDownloadHistory(): DownloadHistoryItem[] {
-  if (typeof window === "undefined") return []
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-/**
- * Menghapus seluruh riwayat unduhan
- */
-export function clearDownloadHistory() {
-  if (typeof window === "undefined") return
-  localStorage.removeItem(STORAGE_KEY)
-}
-
-/**
  * Ekspor array data menjadi file CSV dan trigger download di browser
  */
 export function exportToCsv({

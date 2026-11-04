@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client"
-import type { Patient, CareLevel } from "@/app/(dashboard)/kelola-pasien/page"
+import type { Patient, CareLevel } from "@/lib/types/patient"
 
 // Tipe data tabel pasien HCU
 interface PasienHcuRow {

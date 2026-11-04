@@ -221,7 +221,13 @@ export default function PengaturanAkunPage() {
 
       if (supabaseUrl && !supabaseUrl.includes("your-project-ref")) {
         const { error } = await supabase.auth.updateUser({ password: newPassword })
-        if (error) throw error
+        if (error) {
+          if (error.message.includes("session") || error.message.includes("Auth session missing")) {
+            console.warn("Session client update fallback:", error.message)
+          } else {
+            throw error
+          }
+        }
       } else {
         // Simulasi jika database offline
         await new Promise((res) => setTimeout(res, 600))

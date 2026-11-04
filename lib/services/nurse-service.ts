@@ -29,8 +29,6 @@ function getSupabase() {
   return createClient()
 }
 
-export const INITIAL_NURSES: NurseAccount[] = []
-
 // ------------------------------------------------------------------------------
 // 1. AMBIL SELURUH DAFTAR AKUN PERAWAT
 // ------------------------------------------------------------------------------

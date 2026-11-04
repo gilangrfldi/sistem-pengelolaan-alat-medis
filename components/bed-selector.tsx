@@ -3,14 +3,9 @@
 import * as React from "react"
 import { BedSingle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { REGULAR_BEDS, ISOLATION_BEDS, ALL_BEDS } from "@/lib/constants/beds"
 
-export const REGULAR_BEDS = Array.from({ length: 19 }, (_, i) => {
-  const num = String(i + 1).padStart(2, "0")
-  return `Bed ${num}`
-})
-
-export const ISOLATION_BEDS = ["Isolasi 1", "Isolasi 2"]
-export const ALL_BEDS = [...REGULAR_BEDS, ...ISOLATION_BEDS]
+export { REGULAR_BEDS, ISOLATION_BEDS, ALL_BEDS }
 
 export type BedVisualVariant = "available" | "occupied" | "empty"
 
@@ -298,6 +293,7 @@ export function BedSelector({
                 <button
                   key={bed}
                   type="button"
+                  data-testid={`bed-btn-${bed.toLowerCase().replace(/\s+/g, "-")}`}
                   disabled={isDisabled}
                   onClick={() => {
                     if (!isDisabled) onSelectBed(bed)
@@ -379,6 +375,7 @@ export function BedSelector({
                 <button
                   key={bed}
                   type="button"
+                  data-testid={`bed-btn-${bed.toLowerCase().replace(/\s+/g, "-")}`}
                   disabled={isDisabled}
                   onClick={() => {
                     if (!isDisabled) onSelectBed(bed)

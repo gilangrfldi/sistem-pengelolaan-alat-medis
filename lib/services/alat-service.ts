@@ -4,7 +4,8 @@ import type {
   TimedToolUsageRecord,
   CountToolUsageRecord,
   DamagedToolRecord,
-} from "@/app/(dashboard)/kelola-alat/page"
+  CountActionLog,
+} from "@/lib/types/tool"
 
 // Tipe data tabel alat medis
 interface MasterAlatRow {
@@ -341,9 +342,18 @@ export async function fetchCountToolsFromDb(): Promise<{
     }
 
     const mapped: CountToolUsageRecord[] = ((data as AlatKaliRow[]) || []).map((row) => {
-      const cleanNotes = row.notes
-        ? row.notes.replace("__STATUS_SELESAI__", "").trim()
-        : undefined
+      let parsedLogs: CountActionLog[] | undefined = undefined
+      let cleanNotes = row.notes
+      if (cleanNotes) {
+        const match = cleanNotes.match(/__ACTION_LOGS__([\s\S]*?)__END_ACTION_LOGS__/)
+        if (match && match[1]) {
+          try {
+            parsedLogs = JSON.parse(match[1])
+            cleanNotes = cleanNotes.replace(/__ACTION_LOGS__[\s\S]*?__END_ACTION_LOGS__/g, "").trim()
+          } catch {}
+        }
+        cleanNotes = cleanNotes.replace(/__STATUS_SELESAI__/g, "").trim()
+      }
 
       return {
         id: row.id,
@@ -359,6 +369,7 @@ export async function fetchCountToolsFromDb(): Promise<{
         notes: cleanNotes || undefined,
         status: "selesai",
         createdAt: row.created_at,
+        actionLogs: parsedLogs,
       }
     })
 
@@ -373,6 +384,14 @@ export async function insertCountToolInDb(
   record: Omit<CountToolUsageRecord, "id">
 ): Promise<CountToolUsageRecord> {
   const supabase = getSupabase()
+  let notesValue = record.notes || ""
+  if (record.actionLogs && record.actionLogs.length > 0) {
+    notesValue = `${notesValue} __ACTION_LOGS__${JSON.stringify(record.actionLogs)}__END_ACTION_LOGS__`.trim()
+  }
+  if (record.status === "selesai" || !record.status) {
+    notesValue = notesValue ? `${notesValue} __STATUS_SELESAI__` : "__STATUS_SELESAI__"
+  }
+
   const payload: Record<string, unknown> = {
     bed: record.bed,
     patient_name: record.patientName,
@@ -381,9 +400,7 @@ export async function insertCountToolInDb(
     count: record.count,
     last_action_time: record.lastActionTime,
     nurse_name: record.nurseName,
-    notes: record.status === "selesai" || !record.status
-      ? (record.notes ? `${record.notes} __STATUS_SELESAI__` : "__STATUS_SELESAI__")
-      : (record.notes ?? null),
+    notes: notesValue || null,
     status: record.status || "selesai",
   }
 
@@ -419,9 +436,12 @@ export async function insertCountToolInDb(
     savedCount: dataResult.count ?? record.count,
     lastActionTime: dataResult.last_action_time,
     nurseName: dataResult.nurse_name,
-    notes: record.notes || undefined,
+    notes: record.notes
+      ? record.notes.replace(/__ACTION_LOGS__[\s\S]*?__END_ACTION_LOGS__/g, "").replace(/__STATUS_SELESAI__/g, "").trim() || undefined
+      : undefined,
     status: (dataResult.status as "draft" | "selesai") || (record.status as "draft" | "selesai") || "selesai",
     createdAt: dataResult.created_at || new Date().toISOString(),
+    actionLogs: record.actionLogs,
   }
 }
 
@@ -433,6 +453,7 @@ export async function updateCountToolInDb(
     nurseName?: string
     status?: "draft" | "selesai"
     notes?: string
+    actionLogs?: CountActionLog[]
   }
 ): Promise<void> {
   const supabase = getSupabase()
@@ -442,11 +463,18 @@ export async function updateCountToolInDb(
   if (updates.nurseName !== undefined) payload.nurse_name = updates.nurseName
   if (updates.status !== undefined) payload.status = updates.status
 
+  let notesVal = updates.notes !== undefined ? updates.notes : undefined
+  if (updates.actionLogs && updates.actionLogs.length > 0) {
+    const cleanNotes = (notesVal || "").replace(/__ACTION_LOGS__.*?__END_ACTION_LOGS__/, "").trim()
+    const logTag = `__ACTION_LOGS__${JSON.stringify(updates.actionLogs)}__END_ACTION_LOGS__`
+    notesVal = cleanNotes ? `${cleanNotes} ${logTag}` : logTag
+  }
+
   if (updates.status === "selesai") {
     // Sertakan penanda internal agar jika kolom status belum termigrasi, tetap terbaca sebagai selesai
-    payload.notes = updates.notes ? `${updates.notes} __STATUS_SELESAI__` : "__STATUS_SELESAI__"
-  } else if (updates.notes !== undefined) {
-    payload.notes = updates.notes
+    payload.notes = notesVal ? `${notesVal} __STATUS_SELESAI__` : "__STATUS_SELESAI__"
+  } else if (notesVal !== undefined) {
+    payload.notes = notesVal
   }
 
   const { error } = await supabase.from("alat_kali").update(payload).eq("id", id)

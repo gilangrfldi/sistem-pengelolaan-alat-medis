@@ -14,8 +14,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sistem Pengelolaan Alat Medis",
-  description: "Sistem Pengelolaan Alat Medis RSUD Welas Asih",
+  title: "SITA - MED: Sistem Inventarisasi & Tracking Alat Medis",
+  description:
+    "SITA - MED: Sistem Inventarisasi & Tracking Alat Medis - Platform pemantauan, operan shift, dan manajemen inventaris alat medis ruang perawatan kritis (HCU/ICU).",
+  icons: {
+    icon: [
+      { url: "/logo.jpeg", href: "/logo.jpeg" },
+      { url: "/icon.jpeg", href: "/icon.jpeg" },
+    ],
+    shortcut: "/logo.jpeg",
+    apple: "/logo.jpeg",
+  },
 };
 
 export default function RootLayout({

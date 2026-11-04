@@ -1,6 +1,5 @@
 "use client"
 
-import * as React from "react"
 import { useState, useEffect, useMemo, useSyncExternalStore } from "react"
 import {
   Download,

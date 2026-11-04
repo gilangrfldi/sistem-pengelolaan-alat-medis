@@ -13,8 +13,8 @@ const routeTitles: Record<string, string> = {
   "/rekap": "Rekap",
   "/rekap/pasien": "Rekap Pasien",
   "/rekap/alat": "Rekap Alat",
-  "/rekap-bulanan": "Rekap Bulanan",
-  "/riwayat-unduhan": "Riwayat & Unduh",
+  "/kelola-perawat": "Kelola Perawat",
+  "/pengaturan-akun": "Pengaturan Akun",
 }
 
 export function DynamicBreadcrumb() {

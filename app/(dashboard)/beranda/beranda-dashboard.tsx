@@ -1,6 +1,5 @@
 "use client"
 
-import * as React from "react"
 import { useState, useEffect, useMemo } from "react"
 import { Users, Activity, Clock, CheckCircle2 } from "lucide-react"
 import { PeriodFilterBar } from "@/components/period-filter-bar"

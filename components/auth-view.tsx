@@ -2,16 +2,15 @@
 
 import { useState, useEffect, useRef, FormEvent } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import {
   Eye,
   EyeOff,
-  Activity,
   ArrowRight,
   CheckCircle2,
   AlertCircle,
+  Check,
   X,
-  Mail,
-  Loader2,
 } from "lucide-react"
 import { cn } from "cn"
 import { createClient } from "@/lib/supabase/client"
@@ -22,47 +21,12 @@ import {
   NurseRole,
   NurseStatus,
 } from "@/lib/services/nurse-service"
+import { validateStrictEmail } from "@/lib/utils/validate-email"
+import { ModalForgotPassword } from "@/components/auth/modal-forgot-password"
+import { ModalAlreadyRegistered } from "@/components/auth/modal-already-registered"
 
 interface AuthViewProps {
   initialMode?: "masuk" | "daftar"
-}
-
-// Validasi ketat format email
-function validateStrictEmail(email: string): { isValid: boolean; error?: string } {
-  const trimmed = email.trim().toLowerCase()
-  if (!trimmed) {
-    return { isValid: false, error: "Email wajib diisi." }
-  }
-
-  const basicRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
-  if (!basicRegex.test(trimmed)) {
-    return { isValid: false, error: "Format email tidak valid. Contoh: perawat@gmail.com" }
-  }
-
-  const parts = trimmed.split("@")
-  if (parts.length !== 2) {
-    return { isValid: false, error: "Format email tidak valid." }
-  }
-
-  const domain = parts[1]
-  const typoDomains: Record<string, string> = {
-    "gmil.com": "gmail.com",
-    "gmai.com": "gmail.com",
-    "gmial.com": "gmail.com",
-    "gmail.co": "gmail.com",
-    "yahoo.co": "yahoo.com",
-    "yaho.com": "yahoo.com",
-    "hotmial.com": "hotmail.com",
-  }
-
-  if (typoDomains[domain]) {
-    return {
-      isValid: false,
-      error: `Domain email tidak valid. Apakah maksud Anda: ${parts[0]}@${typoDomains[domain]}?`,
-    }
-  }
-
-  return { isValid: true }
 }
 
 // Cek apakah callback OAuth Google sedang aktif di URL browser
@@ -305,7 +269,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
           totalCount = count ?? 0
         } catch {}
 
-        // KASUS A: PENGGUNA MEMILIH "MASUK DENGAN GOOGLE" TETAPI AKUN BELUM TERDAFTAR
+        // Kasus 1: Login Google tetapi akun belum terdaftar di sistem
         if (!isGoogleSignUp && !profile && totalCount > 0) {
           if (typeof window !== "undefined") {
             sessionStorage.removeItem("sp_oauth_pending")
@@ -319,7 +283,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
           return
         }
 
-        // KASUS B: PENGGUNA MEMILIH "DAFTAR DENGAN GOOGLE" TETAPI AKUN SUDAH TERDAFTAR DI DATABASE
+        // Kasus 2: Registrasi Google tetapi email sudah terdaftar
         if (isGoogleSignUp && profile && totalCount > 0) {
           if (typeof window !== "undefined") {
             sessionStorage.removeItem("sp_oauth_pending")
@@ -668,6 +632,16 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
       return
     }
 
+    const hasMinLength = regPassword.length >= 8
+    const hasLower = /[a-z]/.test(regPassword)
+    const hasUpper = /[A-Z]/.test(regPassword)
+    const hasNumber = /[0-9]/.test(regPassword)
+    if (!hasMinLength || !hasLower || !hasUpper || !hasNumber) {
+      setAuthError("Kata sandi harus memenuhi semua kriteria keamanan yang tertera di bawah input.")
+      setIsLoading(false)
+      return
+    }
+
     try {
       const supabase = createClient()
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -976,13 +950,19 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#e8ecf4] dark:bg-neutral-950 p-4 sm:p-6 transition-colors relative">
       {/* Brand Header */}
       <div className="mb-5 flex items-center gap-2.5 text-neutral-800 dark:text-neutral-200">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-[#512da8] text-white shadow-sm">
-          <Activity className="size-4" />
+        <div className="flex size-9 items-center justify-center rounded-lg bg-white overflow-hidden shadow-sm border border-neutral-200 dark:border-neutral-700">
+          <Image
+            src="/logo.jpeg"
+            alt="Logo SITA MED"
+            width={36}
+            height={36}
+            className="size-full object-cover"
+          />
         </div>
         <div className="flex flex-col">
-          <span className="font-bold text-sm tracking-tight">RSUD Welas Asih</span>
+          <span className="font-bold text-sm tracking-tight">SITA MED</span>
           <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
-            Sistem Pengelolaan Alat Medis Ruang HCU
+            Sistem Inventarisasi & Tracking Alat Medis
           </span>
         </div>
       </div>
@@ -1174,7 +1154,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
           <form onSubmit={handleSignUp} className="w-full max-w-[310px] space-y-3.5">
             <input
               type="text"
-              placeholder="Nama lengkap perawat"
+              placeholder="Masukkan Nama Lengkap"
               value={regName}
               onChange={(e) => setRegName(e.target.value)}
               autoComplete="name"
@@ -1183,7 +1163,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
             />
             <input
               type="email"
-              placeholder="Email dinas atau pribadi"
+              placeholder="Masukkan Email"
               value={regEmail}
               onChange={(e) => setRegEmail(e.target.value)}
               autoComplete="email"
@@ -1195,12 +1175,11 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
             <div className="relative w-full">
               <input
                 type={showRegPassword ? "text" : "password"}
-                placeholder="Kata sandi (minimal 6 karakter)"
+                placeholder="Masukkan Kata Sandi"
                 value={regPassword}
                 onChange={(e) => setRegPassword(e.target.value)}
                 autoComplete="new-password"
                 required
-                minLength={6}
                 className="w-full bg-[#eeeeee] dark:bg-neutral-800 border-0 rounded-lg text-xs sm:text-sm pl-4 pr-10 py-3 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 text-neutral-800 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-[#512da8]/30 transition"
               />
               <button
@@ -1215,6 +1194,73 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
                   <Eye className="size-4" />
                 )}
               </button>
+            </div>
+
+            {/* Indikator Kriteria Keamanan Kata Sandi */}
+            <div className="text-left space-y-1.5 pt-1 px-1">
+              <div
+                className={cn(
+                  "flex items-center gap-2 text-xs transition-colors",
+                  /[a-z]/.test(regPassword)
+                    ? "text-emerald-600 dark:text-emerald-400 font-medium"
+                    : "text-neutral-500 dark:text-neutral-400"
+                )}
+              >
+                {/[a-z]/.test(regPassword) ? (
+                  <Check className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                ) : (
+                  <X className="size-3.5 text-neutral-400 shrink-0" />
+                )}
+                <span>Setidaknya satu huruf kecil</span>
+              </div>
+
+              <div
+                className={cn(
+                  "flex items-center gap-2 text-xs transition-colors",
+                  regPassword.length >= 8
+                    ? "text-emerald-600 dark:text-emerald-400 font-medium"
+                    : "text-neutral-500 dark:text-neutral-400"
+                )}
+              >
+                {regPassword.length >= 8 ? (
+                  <Check className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                ) : (
+                  <X className="size-3.5 text-neutral-400 shrink-0" />
+                )}
+                <span>Minimal 8 karakter</span>
+              </div>
+
+              <div
+                className={cn(
+                  "flex items-center gap-2 text-xs transition-colors",
+                  /[A-Z]/.test(regPassword)
+                    ? "text-emerald-600 dark:text-emerald-400 font-medium"
+                    : "text-neutral-500 dark:text-neutral-400"
+                )}
+              >
+                {/[A-Z]/.test(regPassword) ? (
+                  <Check className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                ) : (
+                  <X className="size-3.5 text-neutral-400 shrink-0" />
+                )}
+                <span>Setidaknya satu huruf besar</span>
+              </div>
+
+              <div
+                className={cn(
+                  "flex items-center gap-2 text-xs transition-colors",
+                  /[0-9]/.test(regPassword)
+                    ? "text-emerald-600 dark:text-emerald-400 font-medium"
+                    : "text-neutral-500 dark:text-neutral-400"
+                )}
+              >
+                {/[0-9]/.test(regPassword) ? (
+                  <Check className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                ) : (
+                  <X className="size-3.5 text-neutral-400 shrink-0" />
+                )}
+                <span>Setidaknya satu angka</span>
+              </div>
             </div>
 
             <div className="pt-2">
@@ -1306,6 +1352,7 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
                 </p>
                 <button
                   type="button"
+                  data-testid="switch-to-signin"
                   onClick={toggleToSignIn}
                   className="border-2 border-white/90 text-white hover:bg-white hover:text-[#512da8] font-bold text-xs uppercase tracking-wider px-10 py-2.5 rounded-lg transition-all duration-200 cursor-pointer shadow-sm"
                 >
@@ -1318,10 +1365,11 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
                   Halo, Rekan!
                 </h2>
                 <p className="text-xs sm:text-sm text-white/90 leading-relaxed max-w-[280px] mb-8 font-light">
-                  Daftarkan diri dengan informasi pribadi Anda untuk menggunakan seluruh fitur sistem pengelolaan alat medis RSUD Welas Asih.
+                  Daftarkan diri dengan informasi pribadi Anda untuk menggunakan seluruh fitur SITA - MED: Sistem Inventarisasi & Tracking Alat Medis.
                 </p>
                 <button
                   type="button"
+                  data-testid="switch-to-signup"
                   onClick={toggleToSignUp}
                   className="border-2 border-white/90 text-white hover:bg-white hover:text-[#512da8] font-bold text-xs uppercase tracking-wider px-10 py-2.5 rounded-lg transition-all duration-200 cursor-pointer shadow-sm flex items-center gap-1.5"
                 >
@@ -1337,157 +1385,28 @@ export function AuthView({ initialMode = "masuk" }: AuthViewProps) {
 
       {/* Footer */}
       <div className="mt-5 text-center text-xs text-neutral-400 dark:text-neutral-500">
-        © 2026 RSUD Welas Asih • Sistem Informasi Pemantauan & Kalibrasi Alat Medis HCU
+        © 2026 SITA MED • Sistem Inventarisasi & Tracking Alat Medis HCU RSUD Welas Asih
       </div>
 
       {/* Modal Lupa Kata Sandi */}
-      {showForgotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800">
-            <button
-              type="button"
-              onClick={() => setShowForgotModal(false)}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 p-1 rounded-lg cursor-pointer transition"
-            >
-              <X className="size-5" />
-            </button>
+      <ModalForgotPassword
+        isOpen={showForgotModal}
+        onClose={() => setShowForgotModal(false)}
+        forgotEmail={forgotEmail}
+        setForgotEmail={setForgotEmail}
+        resetEmailSent={resetEmailSent}
+        resetError={resetError}
+        isSendingReset={isSendingReset}
+        onSubmit={handleSendResetEmail}
+      />
 
-            {!resetEmailSent ? (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex size-9 items-center justify-center rounded-xl bg-[#512da8]/10 text-[#512da8] dark:bg-purple-950/40 dark:text-purple-300">
-                    <Mail className="size-4.5" />
-                  </div>
-                  <h3 className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
-                    Atur Ulang Kata Sandi
-                  </h3>
-                </div>
-
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4 leading-relaxed">
-                  Masukkan email akun perawat yang terdaftar. Kami akan mengirimkan tautan untuk mengatur ulang kata sandi Anda.
-                </p>
-
-                {resetError && (
-                  <div className="mb-4 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 flex items-center gap-2 text-xs text-red-600 dark:text-red-400 text-left">
-                    <AlertCircle className="size-4 shrink-0" />
-                    <span>{resetError}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleSendResetEmail} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
-                      Email Akun
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="nama@email.com"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      className="w-full bg-[#eeeeee] dark:bg-neutral-800 border-0 rounded-lg text-xs sm:text-sm px-4 py-2.5 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 text-neutral-800 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-[#512da8]/30 transition"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowForgotModal(false)}
-                      disabled={isSendingReset}
-                      className="px-4 py-2 rounded-lg text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSendingReset}
-                      className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#512da8] hover:bg-[#43238c] text-white text-xs font-semibold shadow-md transition cursor-pointer disabled:opacity-60"
-                    >
-                      {isSendingReset ? (
-                        <>
-                          <Loader2 className="size-3.5 animate-spin" />
-                          <span>Mengirim...</span>
-                        </>
-                      ) : (
-                        <span>Kirim Tautan</span>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            ) : (
-              <div className="text-center py-2 space-y-3">
-                <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
-                  <CheckCircle2 className="size-6" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
-                    Tautan Reset Berhasil Dikirim
-                  </h3>
-                  <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400 max-w-xs mx-auto leading-relaxed">
-                    Kami telah mengirimkan instruksi dan tautan untuk membuat kata sandi baru ke{" "}
-                    <strong className="text-neutral-800 dark:text-neutral-200">{forgotEmail}</strong>.
-                    Silakan periksa kotak masuk atau spam email Anda.
-                  </p>
-                </div>
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowForgotModal(false)}
-                    className="w-full py-2.5 px-4 rounded-xl bg-[#512da8] text-white font-semibold text-xs shadow-md hover:bg-[#432588] transition cursor-pointer"
-                  >
-                    Tutup dan Kembali ke Masuk
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
       {/* Modal Akun Google Sudah Terdaftar */}
-      {showAlreadyRegisteredModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 sm:p-7 shadow-2xl dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 text-center animate-in zoom-in-95 duration-200">
-            <button
-              type="button"
-              onClick={handleSwitchToLoginFromModal}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 p-1 rounded-lg cursor-pointer transition"
-            >
-              <X className="size-5" />
-            </button>
-
-            <div className="flex size-14 items-center justify-center rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 mx-auto mb-3.5 border border-amber-200 dark:border-amber-800">
-              <AlertCircle className="size-7" />
-            </div>
-
-            <h3 className="font-bold text-base sm:text-lg text-neutral-800 dark:text-neutral-100 mb-2">
-              Akun Sudah Terdaftar
-            </h3>
-
-            <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed mb-6">
-              Akun Google <strong className="text-neutral-800 dark:text-neutral-100">{registeredGoogleEmail}</strong> sudah terdaftar di sistem. Anda tidak perlu mendaftar ulang.
-            </p>
-
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={handleContinueAsExistingUser}
-                className="w-full bg-[#512da8] hover:bg-[#43238c] text-white py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer shadow-md"
-              >
-                Lanjutkan Masuk ke Sistem
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSwitchToLoginFromModal}
-                className="w-full bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 py-2.5 px-4 rounded-xl text-xs font-semibold transition cursor-pointer"
-              >
-                Gunakan Akun Lain / Ke Halaman Masuk
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ModalAlreadyRegistered
+        isOpen={showAlreadyRegisteredModal}
+        email={registeredGoogleEmail}
+        onContinueLogin={handleContinueAsExistingUser}
+        onSwitchAccount={handleSwitchToLoginFromModal}
+      />
     </div>
   )
 }

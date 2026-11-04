@@ -25,9 +25,9 @@ const data = {
   },
   headers: [
     {
-      name: "RSUD Welas Asih",
+      name: "SITA MED",
       logo: "/logo.jpeg",
-      plan: "HCU",
+      plan: "Inventarisasi & Tracking",
     },
   ],
   navMain: [
@@ -110,10 +110,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               className="hover:bg-transparent active:bg-transparent cursor-default px-2 group-data-[collapsible=icon]:p-0!"
             >
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden bg-white/10 shrink-0 border border-white/20">
-                {/* Logo RSUD Welas Asih */}
+                {/* Logo Identitas SITA MED */}
                 <Image
                   src="/logo.jpeg"
-                  alt="Logo RSUD Welas Asih"
+                  alt="Logo SITA MED"
                   width={32}
                   height={32}
                   className="size-full object-cover"

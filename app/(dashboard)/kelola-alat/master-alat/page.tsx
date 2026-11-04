@@ -11,7 +11,6 @@ import {
   Trash2,
   Edit2,
   ArrowLeft,
-  AlertCircle,
   Timer,
   Zap,
   Check,
@@ -31,6 +30,8 @@ import {
   fetchTimedToolsFromDb,
 } from "@/lib/services/alat-service"
 import { toast } from "@/components/ui/app-toast"
+import { ModalMasterAlatForm } from "./components/modal-master-alat-form"
+import { ModalLaporRusak } from "./components/modal-lapor-rusak"
 import {
   type MasterTool,
   type ToolCategory,
@@ -869,770 +870,95 @@ export default function MasterAlatPage() {
       {/* ======================================================== */}
       {/* MODAL 1: TAMBAH ALAT BARU KE MASTER */}
       {/* ======================================================== */}
-      <AppModal
+      <ModalMasterAlatForm
+        mode="add"
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        title="Tambah Alat Medis Baru ke Master HCU"
-        subtitle="Daftarkan peralatan medis baru ke dalam inventaris ruangan"
-        icon={<Plus className="size-5" />}
+        formError={formError}
+        name={formName}
+        setName={setFormName}
+        category={formCategory}
+        setCategory={setFormCategory}
+        hasUnitNumber={formHasUnitNumber}
+        setHasUnitNumber={setFormHasUnitNumber}
+        unitMode={formUnitMode}
+        setUnitMode={setFormUnitMode}
+        singleUnit={formSingleUnit}
+        setSingleUnit={setFormSingleUnit}
+        unitStart={formUnitStart}
+        setUnitStart={setFormUnitStart}
+        unitEnd={formUnitEnd}
+        setUnitEnd={setFormUnitEnd}
+        hasTotalUnits={formHasTotalUnits}
+        setHasTotalUnits={setFormHasTotalUnits}
+        totalUnits={formTotalUnits}
+        setTotalUnits={setFormTotalUnits}
+        hasLocation={formHasLocation}
+        setHasLocation={setFormHasLocation}
+        locations={formLocations}
+        setLocations={setFormLocations}
+        description={formDescription}
+        setDescription={setFormDescription}
         onSubmit={handleSubmitAddTool}
-        submitText="Simpan ke Katalog Master"
-        maxWidth="md"
-      >
-        {formError && (
-          <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200">
-            <AlertCircle className="size-4 shrink-0" />
-            <span>{formError}</span>
-          </div>
-        )}
-
-        <div className="space-y-3.5">
-          <div>
-            <label className="block text-xs font-bold text-neutral-900 dark:text-neutral-100 mb-1">
-              Nama Alat Medis *
-            </label>
-            <input
-              type="text"
-              required
-              placeholder="Contoh: Ventilator Transport, Blood Warmer..."
-              value={formName}
-              onChange={(e) => setFormName(e.target.value)}
-              className="w-full text-xs sm:text-sm p-2.5 rounded-lg border border-border bg-background"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-neutral-900 dark:text-neutral-100 mb-1.5">
-              Kategori Penggunaan *
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setFormCategory("waktu")}
-                className={cn(
-                  "p-2.5 rounded-xl border text-xs font-semibold text-center transition cursor-pointer",
-                  formCategory === "waktu"
-                    ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                    : "bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300"
-                )}
-              >
-                1. Hitungan Waktu
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setFormCategory("kali")
-                  setFormHasUnitNumber(false)
-                  setFormHasTotalUnits(false)
-                  setFormHasLocation(false)
-                }}
-                className={cn(
-                  "p-2.5 rounded-xl border text-xs font-semibold text-center transition cursor-pointer",
-                  formCategory === "kali"
-                    ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                    : "bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300"
-                )}
-              >
-                2. Hitungan Kali
-              </button>
-            </div>
-          </div>
-
-          {/* Opsi Khusus Hitungan Waktu */}
-          {formCategory === "waktu" && (
-            <div className="space-y-3 p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-800/40">
-              <span className="block text-xs font-bold text-neutral-900 dark:text-neutral-100">
-                Pilihan Konfigurasi Fitur Alat:
-              </span>
-
-              {/* Checkbox 1: Nomor Unit */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={formHasUnitNumber}
-                    onChange={(e) => {
-                      const checked = e.target.checked
-                      setFormHasUnitNumber(checked)
-                      if (checked) {
-                        setFormHasTotalUnits(false)
-                      }
-                    }}
-                    className="rounded text-[#512da8] focus:ring-0"
-                  />
-                  <span>Memiliki Nomor Unit Fisik</span>
-                </label>
-
-                {formHasUnitNumber && (
-                  <div className="pl-6 space-y-2">
-                    <div className="flex items-center gap-4 text-xs">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="formUnitMode"
-                          checked={formUnitMode === "single"}
-                          onChange={() => setFormUnitMode("single")}
-                        />
-                        <span>1 Nomor Unit Saja</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="formUnitMode"
-                          checked={formUnitMode === "range"}
-                          onChange={() => setFormUnitMode("range")}
-                        />
-                        <span>Rentang Nomor Unit</span>
-                      </label>
-                    </div>
-
-                    {formUnitMode === "single" ? (
-                      <div>
-                        <label className="block text-[11px] text-muted-foreground mb-1">Nomor Unit (Contoh: 1)</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={formSingleUnit}
-                          onChange={(e) => setFormSingleUnit(Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-32 p-2 text-xs border rounded-lg bg-background font-mono font-bold"
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="block text-[11px] text-muted-foreground mb-1">Rentang Nomor (Contoh: Unit 1 s/d 20)</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={1}
-                            placeholder="Dari"
-                            value={formUnitStart}
-                            onChange={(e) => setFormUnitStart(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-24 p-2 text-xs border rounded-lg bg-background font-mono font-bold"
-                          />
-                          <span className="text-xs text-muted-foreground">s/d</span>
-                          <input
-                            type="number"
-                            min={1}
-                            placeholder="Sampai"
-                            value={formUnitEnd}
-                            onChange={(e) => setFormUnitEnd(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-24 p-2 text-xs border rounded-lg bg-background font-mono font-bold"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Checkbox 2: Total Unit */}
-              <div className="space-y-2 pt-1 border-t border-neutral-200 dark:border-neutral-700">
-                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={formHasTotalUnits}
-                    onChange={(e) => {
-                      const checked = e.target.checked
-                      setFormHasTotalUnits(checked)
-                      if (checked) {
-                        setFormHasUnitNumber(false)
-                      }
-                    }}
-                    className="rounded text-[#512da8] focus:ring-0"
-                  />
-                  <span>Memiliki Total Unit Kuota Fisik (Tanpa Penomoran)</span>
-                </label>
-
-                {formHasTotalUnits && (
-                  <div className="pl-6">
-                    <label className="block text-[11px] text-muted-foreground mb-1">Jumlah Total Unit di Ruangan</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={formTotalUnits}
-                      onChange={(e) => setFormTotalUnits(Math.max(1, parseInt(e.target.value) || 1))}
-                      placeholder="Contoh: 10"
-                      className="w-32 p-2 text-xs border rounded-lg bg-background font-mono font-bold"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Checkbox 3: Lokasi Pemasangan Alat Anatomi */}
-              <div className="space-y-2 pt-1 border-t border-neutral-200 dark:border-neutral-700">
-                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={formHasLocation}
-                    onChange={(e) => setFormHasLocation(e.target.checked)}
-                    className="rounded text-[#512da8] focus:ring-0"
-                  />
-                  <span>Memiliki Lokasi Pemasangan Anatomi</span>
-                </label>
-
-                {formHasLocation && (
-                  <div className="pl-6 space-y-2">
-                    <div className="space-y-1.5">
-                      {formLocations.map((loc, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={loc}
-                            onChange={(e) => {
-                              const val = e.target.value
-                              setFormLocations((prev) => {
-                                const next = [...prev]
-                                next[idx] = val
-                                return next
-                              })
-                            }}
-                            placeholder={`Lokasi ${idx + 1} (Contoh: Tangan Kanan, Leher...)`}
-                            className="flex-1 p-2 text-xs border rounded-lg bg-background"
-                          />
-                          <button
-                            type="button"
-                            disabled={formLocations.length <= 1}
-                            onClick={() => {
-                              if (formLocations.length > 1) {
-                                setFormLocations((prev) => prev.filter((_, i) => i !== idx))
-                              }
-                            }}
-                            title={formLocations.length <= 1 ? "Menyisakan minimal 1 kolom" : "Hapus kolom ini"}
-                            className={cn(
-                              "p-2 rounded-lg border transition",
-                              formLocations.length <= 1
-                                ? "opacity-30 cursor-not-allowed text-neutral-400 border-neutral-200"
-                                : "text-rose-500 border-rose-200 hover:bg-rose-50 cursor-pointer dark:hover:bg-rose-950/40"
-                            )}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    {formLocations.length < 10 && (
-                      <button
-                        type="button"
-                        onClick={() => setFormLocations((prev) => (prev.length < 10 ? [...prev, ""] : prev))}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 cursor-pointer"
-                      >
-                        <Plus className="size-3" />
-                        <span>+ Tambah Lokasi Pemasangan</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {formCategory === "kali" && (
-            <div className="p-3.5 rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/40 dark:bg-purple-950/20 text-xs text-purple-900 dark:text-purple-200">
-              <p className="font-semibold mb-0.5">ℹ️ Kategori Hitungan Kali (Tindakan Medis)</p>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Alat ini dicatat berdasarkan jumlah frekuensi tindakan per pasien (contoh: EKG, GDS, Defibrilator) tanpa nomor unit fisik atau lokasi anatomi.
-              </p>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-semibold mb-1">Deskripsi Tambahan</label>
-            <textarea
-              rows={2}
-              value={formDescription}
-              onChange={(e) => setFormDescription(e.target.value)}
-              placeholder="Keterangan penempatan atau fungsi khusus alat..."
-              className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background"
-            />
-          </div>
-        </div>
-      </AppModal>
+      />
 
       {/* ======================================================== */}
       {/* MODAL 2: EDIT ALAT MASTER */}
       {/* ======================================================== */}
-      <AppModal
+      <ModalMasterAlatForm
+        mode="edit"
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        title="Ubah Data Alat Medis"
-        subtitle={`Perbarui spesifikasi atau jumlah unit ${editingTool?.name}`}
-        icon={<Edit2 className="size-5" />}
+        toolNameForSubtitle={editingTool?.name}
+        name={editName}
+        setName={setEditName}
+        category={editCategory}
+        setCategory={setEditCategory}
+        hasUnitNumber={editHasUnitNumber}
+        setHasUnitNumber={setEditHasUnitNumber}
+        unitMode={editUnitMode}
+        setUnitMode={setEditUnitMode}
+        singleUnit={editSingleUnit}
+        setSingleUnit={setEditSingleUnit}
+        unitStart={editUnitStart}
+        setUnitStart={setEditUnitStart}
+        unitEnd={editUnitEnd}
+        setUnitEnd={setEditUnitEnd}
+        hasTotalUnits={editHasTotalUnits}
+        setHasTotalUnits={setEditHasTotalUnits}
+        totalUnits={editTotalUnits}
+        setTotalUnits={setEditTotalUnits}
+        hasLocation={editHasLocation}
+        setHasLocation={setEditHasLocation}
+        locations={editLocations}
+        setLocations={setEditLocations}
+        description={editDescription}
+        setDescription={setEditDescription}
         onSubmit={handleSubmitEditTool}
-        submitText="Perbarui Data Alat"
-        maxWidth="md"
-      >
-        <div className="space-y-3.5">
-          <div>
-            <label className="block text-xs font-bold text-neutral-900 dark:text-neutral-100 mb-1">
-              Nama Alat Medis *
-            </label>
-            <input
-              type="text"
-              required
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className="w-full text-xs sm:text-sm p-2.5 rounded-lg border border-border bg-background"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-neutral-900 dark:text-neutral-100 mb-1.5">
-              Kategori Penggunaan *
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setEditCategory("waktu")}
-                className={cn(
-                  "p-2.5 rounded-xl border text-xs font-semibold text-center transition cursor-pointer",
-                  editCategory === "waktu"
-                    ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                    : "bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300"
-                )}
-              >
-                1. Hitungan Waktu
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditCategory("kali")
-                  setEditHasUnitNumber(false)
-                  setEditHasTotalUnits(false)
-                  setEditHasLocation(false)
-                }}
-                className={cn(
-                  "p-2.5 rounded-xl border text-xs font-semibold text-center transition cursor-pointer",
-                  editCategory === "kali"
-                    ? "bg-[#512da8] text-white border-[#512da8] shadow-xs"
-                    : "bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300"
-                )}
-              >
-                2. Hitungan Kali
-              </button>
-            </div>
-          </div>
-
-          {/* Opsi Khusus Hitungan Waktu Edit */}
-          {editCategory === "waktu" && (
-            <div className="space-y-3 p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-800/40">
-              <span className="block text-xs font-bold text-neutral-900 dark:text-neutral-100">
-                Pilihan Konfigurasi Fitur Alat:
-              </span>
-
-              {/* Checkbox 1: Nomor Unit */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={editHasUnitNumber}
-                    onChange={(e) => {
-                      const checked = e.target.checked
-                      setEditHasUnitNumber(checked)
-                      if (checked) {
-                        setEditHasTotalUnits(false)
-                      }
-                    }}
-                    className="rounded text-[#512da8] focus:ring-0"
-                  />
-                  <span>Memiliki Nomor Unit Fisik</span>
-                </label>
-
-                {editHasUnitNumber && (
-                  <div className="pl-6 space-y-2">
-                    <div className="flex items-center gap-4 text-xs">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="editUnitMode"
-                          checked={editUnitMode === "single"}
-                          onChange={() => setEditUnitMode("single")}
-                        />
-                        <span>1 Nomor Unit Saja</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="editUnitMode"
-                          checked={editUnitMode === "range"}
-                          onChange={() => setEditUnitMode("range")}
-                        />
-                        <span>Rentang Nomor Unit</span>
-                      </label>
-                    </div>
-
-                    {editUnitMode === "single" ? (
-                      <div>
-                        <label className="block text-[11px] text-muted-foreground mb-1">Nomor Unit (Contoh: 1)</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={editSingleUnit}
-                          onChange={(e) => setEditSingleUnit(Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-32 p-2 text-xs border rounded-lg bg-background font-mono font-bold"
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="block text-[11px] text-muted-foreground mb-1">Rentang Nomor (Contoh: Unit 1 s/d 20)</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={1}
-                            placeholder="Dari"
-                            value={editUnitStart}
-                            onChange={(e) => setEditUnitStart(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-24 p-2 text-xs border rounded-lg bg-background font-mono font-bold"
-                          />
-                          <span className="text-xs text-muted-foreground">s/d</span>
-                          <input
-                            type="number"
-                            min={1}
-                            placeholder="Sampai"
-                            value={editUnitEnd}
-                            onChange={(e) => setEditUnitEnd(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-24 p-2 text-xs border rounded-lg bg-background font-mono font-bold"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Checkbox 2: Total Unit */}
-              <div className="space-y-2 pt-1 border-t border-neutral-200 dark:border-neutral-700">
-                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={editHasTotalUnits}
-                    onChange={(e) => {
-                      const checked = e.target.checked
-                      setEditHasTotalUnits(checked)
-                      if (checked) {
-                        setEditHasUnitNumber(false)
-                      }
-                    }}
-                    className="rounded text-[#512da8] focus:ring-0"
-                  />
-                  <span>Memiliki Total Unit Kuota Fisik (Tanpa Penomoran)</span>
-                </label>
-
-                {editHasTotalUnits && (
-                  <div className="pl-6">
-                    <label className="block text-[11px] text-muted-foreground mb-1">Jumlah Total Unit di Ruangan</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={editTotalUnits}
-                      onChange={(e) => setEditTotalUnits(Math.max(1, parseInt(e.target.value) || 1))}
-                      placeholder="Contoh: 10"
-                      className="w-32 p-2 text-xs border rounded-lg bg-background font-mono font-bold"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Checkbox 3: Lokasi Pemasangan Alat Anatomi */}
-              <div className="space-y-2 pt-1 border-t border-neutral-200 dark:border-neutral-700">
-                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={editHasLocation}
-                    onChange={(e) => setEditHasLocation(e.target.checked)}
-                    className="rounded text-[#512da8] focus:ring-0"
-                  />
-                  <span>Memiliki Lokasi Pemasangan Anatomi</span>
-                </label>
-
-                {editHasLocation && (
-                  <div className="pl-6 space-y-2">
-                    <div className="space-y-1.5">
-                      {editLocations.map((loc, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={loc}
-                            onChange={(e) => {
-                              const val = e.target.value
-                              setEditLocations((prev) => {
-                                const next = [...prev]
-                                next[idx] = val
-                                return next
-                              })
-                            }}
-                            placeholder={`Lokasi ${idx + 1} (Contoh: Tangan Kanan, Leher...)`}
-                            className="flex-1 p-2 text-xs border rounded-lg bg-background"
-                          />
-                          <button
-                            type="button"
-                            disabled={editLocations.length <= 1}
-                            onClick={() => {
-                              if (editLocations.length > 1) {
-                                setEditLocations((prev) => prev.filter((_, i) => i !== idx))
-                              }
-                            }}
-                            title={editLocations.length <= 1 ? "Menyisakan minimal 1 kolom" : "Hapus kolom ini"}
-                            className={cn(
-                              "p-2 rounded-lg border transition",
-                              editLocations.length <= 1
-                                ? "opacity-30 cursor-not-allowed text-neutral-400 border-neutral-200"
-                                : "text-rose-500 border-rose-200 hover:bg-rose-50 cursor-pointer dark:hover:bg-rose-950/40"
-                            )}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    {editLocations.length < 10 && (
-                      <button
-                        type="button"
-                        onClick={() => setEditLocations((prev) => (prev.length < 10 ? [...prev, ""] : prev))}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 cursor-pointer"
-                      >
-                        <Plus className="size-3" />
-                        <span>+ Tambah Lokasi Pemasangan</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {editCategory === "kali" && (
-            <div className="p-3.5 rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/40 dark:bg-purple-950/20 text-xs text-purple-900 dark:text-purple-200">
-              <p className="font-semibold mb-0.5">ℹ️ Kategori Hitungan Kali (Tindakan Medis)</p>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Alat ini dicatat berdasarkan jumlah frekuensi tindakan per pasien (contoh: EKG, GDS, Defibrilator) tanpa nomor unit fisik atau lokasi anatomi.
-              </p>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-semibold mb-1">Deskripsi Tambahan</label>
-            <textarea
-              rows={2}
-              value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
-              className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background"
-            />
-          </div>
-        </div>
-      </AppModal>
+      />
 
       {/* ======================================================== */}
       {/* MODAL 3: LAPOR ALAT RUSAK */}
       {/* ======================================================== */}
-      <AppModal
+      <ModalLaporRusak
         isOpen={showDamageModal}
         onClose={() => setShowDamageModal(false)}
-        title="Lapor Kerusakan Alat Medis"
-        subtitle="Unit yang dilaporkan rusak otomatis dinonaktifkan dari pemilihan alat pasien"
-        icon={<Wrench className="size-5 text-rose-500" />}
+        masterTools={masterTools}
+        damagedTools={damagedTools}
+        dmgSelectedTool={dmgSelectedTool}
+        setDmgSelectedTool={setDmgSelectedTool}
+        dmgSelectedNumbers={dmgSelectedNumbers}
+        setDmgSelectedNumbers={setDmgSelectedNumbers}
+        dmgQuantity={dmgQuantity}
+        setDmgQuantity={setDmgQuantity}
+        dmgSeverity={dmgSeverity}
+        setDmgSeverity={setDmgSeverity}
+        dmgNotes={dmgNotes}
+        setDmgNotes={setDmgNotes}
+        dmgError={dmgError}
+        setDmgError={setDmgError}
         onSubmit={handleSubmitDamage}
-        submitText="Kirim Laporan Kerusakan"
-        submitVariant="danger"
-        maxWidth="md"
-      >
-        {dmgError && (
-          <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200">
-            <AlertCircle className="size-4 shrink-0" />
-            <span>{dmgError}</span>
-          </div>
-        )}
-
-        <div className="space-y-3.5">
-          <div>
-            <label className="block text-xs font-semibold mb-1">Pilih Alat Rusak *</label>
-            <select
-              value={dmgSelectedTool}
-              onChange={(e) => {
-                setDmgSelectedTool(e.target.value)
-                setDmgSelectedNumbers([])
-                setDmgQuantity(1)
-                setDmgError(null)
-              }}
-              className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background cursor-pointer"
-            >
-              {masterTools.map((m) => (
-                <option key={m.id} value={m.name}>
-                  {m.name}{" "}
-                  {m.hasUnitNumber
-                    ? `(Unit #${m.unitStartNumber || 1}-${m.unitEndNumber || m.totalUnits})`
-                    : m.totalUnits > 0
-                    ? `(${m.totalUnits} unit)`
-                    : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Kondisi Dinamis Form Lapor Rusak Berdasarkan Jenis Master Tool */}
-          {(() => {
-            const target = masterTools.find((m) => m.name === dmgSelectedTool)
-
-            // Kondisi 1: Memiliki Nomor Unit Fisik -> Tampilkan Grid Chip Nomor (bisa multi-select)
-            if (target?.hasUnitNumber) {
-              const start = target.unitStartNumber || 1
-              const end = target.unitEndNumber || target.totalUnits || 21
-              const total = Math.max(1, end - start + 1)
-
-              // Nomor unit yang sudah berstatus rusak saat ini
-              const alreadyDamagedNumbers = new Set(
-                damagedTools
-                  .filter((d) => d.toolName === dmgSelectedTool)
-                  .flatMap((d) => d.unitNumbers)
-              )
-
-              return (
-                <div className="space-y-2 p-3 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/30 dark:bg-rose-950/20">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-neutral-900 dark:text-neutral-100">
-                      Pilih Nomor Unit {target.name} yang Rusak *
-                    </label>
-                    <div className="flex items-center gap-2 text-[10px]">
-                      <span className="flex items-center gap-1 text-neutral-800 dark:text-neutral-200">
-                        <span className="size-2 rounded bg-neutral-900 dark:bg-white" /> Dipilih
-                      </span>
-                      <span className="flex items-center gap-1 text-rose-600">
-                        <span className="size-2 rounded bg-rose-200 border border-rose-400" /> Sudah Rusak
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-8 sm:grid-cols-10 gap-1.5 max-h-40 overflow-y-auto p-2 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800">
-                    {Array.from({ length: total }, (_, i) => start + i).map((num) => {
-                      const isAlreadyDamaged = alreadyDamagedNumbers.has(num)
-                      const isSelected = dmgSelectedNumbers.includes(num)
-
-                      return (
-                        <button
-                          key={num}
-                          type="button"
-                          disabled={isAlreadyDamaged}
-                          onClick={() => {
-                            setDmgSelectedNumbers((prev) => {
-                              const next = prev.includes(num)
-                                ? prev.filter((n) => n !== num)
-                                : [...prev, num]
-                              setDmgQuantity(Math.max(1, next.length))
-                              return next
-                            })
-                          }}
-                          title={
-                            isAlreadyDamaged
-                              ? `Unit #${num}: Sudah dilaporkan rusak`
-                              : isSelected
-                              ? `Unit #${num}: Dipilih rusak (klik untuk batal)`
-                              : `Unit #${num}: Klik untuk pilih rusak`
-                          }
-                          className={cn(
-                            "py-1.5 rounded text-xs font-bold transition text-center cursor-pointer select-none",
-                            isSelected
-                              ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-xs"
-                              : isAlreadyDamaged
-                              ? "bg-rose-100 text-rose-500 border border-rose-300 cursor-not-allowed line-through opacity-70"
-                              : "bg-neutral-100 text-neutral-700 hover:bg-rose-600 hover:text-white"
-                          )}
-                        >
-                          {num}
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs font-semibold pt-1 text-rose-800 dark:text-rose-300">
-                    <span>
-                      Unit Terpilih:{" "}
-                      {dmgSelectedNumbers.length > 0
-                        ? `#${[...dmgSelectedNumbers].sort((a, b) => a - b).join(", #")}`
-                        : "Belum ada unit yang dipilih"}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-rose-200/70 text-rose-900 text-[11px] font-bold">
-                      Total: {dmgSelectedNumbers.length} Unit
-                    </span>
-                  </div>
-                </div>
-              )
-            }
-
-            // Kondisi 2: Tidak Memiliki Nomor Unit, Tapi Memiliki Jumlah Unit Fisik
-            if (target && target.totalUnits > 0) {
-              return (
-                <div>
-                  <label className="block text-xs font-semibold mb-1">
-                    Jumlah Unit Rusak (Tersedia {target.totalUnits} Unit di Ruangan HCU) *
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={target.totalUnits}
-                    value={dmgQuantity}
-                    onChange={(e) =>
-                      setDmgQuantity(
-                        Math.max(
-                          1,
-                          Math.min(target.totalUnits, parseInt(e.target.value) || 1)
-                        )
-                      )
-                    }
-                    className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background font-mono font-bold"
-                  />
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Alat ini tidak memiliki nomor unit fisik. Masukkan berapa unit yang mengalami kerusakan.
-                  </p>
-                </div>
-              )
-            }
-
-            // Kondisi 3: Tidak Memiliki Jumlah Unit Maupun Nomor Unit
-            return (
-              <div>
-                <label className="block text-xs font-semibold mb-1">Jumlah Unit Rusak *</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={dmgQuantity}
-                  onChange={(e) =>
-                    setDmgQuantity(Math.max(1, parseInt(e.target.value) || 1))
-                  }
-                  className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background font-mono font-bold"
-                />
-              </div>
-            )
-          })()}
-
-          <div>
-            <label className="block text-xs font-semibold mb-1">Tingkat Kerusakan</label>
-            <select
-              value={dmgSeverity}
-              onChange={(e) =>
-                setDmgSeverity(
-                  e.target.value as "rusak_ringan" | "rusak_berat"
-                )
-              }
-              className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background cursor-pointer"
-            >
-              <option value="rusak_ringan">Rusak Ringan</option>
-              <option value="rusak_berat">Rusak Berat</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold mb-1">Keterangan Kendala Kerusakan</label>
-            <textarea
-              rows={2}
-              value={dmgNotes}
-              onChange={(e) => setDmgNotes(e.target.value)}
-              placeholder="Jelaskan kendala kerusakan alat secara rinci..."
-              className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background"
-            />
-          </div>
-        </div>
-      </AppModal>
+      />
 
       {/* ======================================================== */}
       {/* MODAL 4: KONFIRMASI HAPUS ALAT */}

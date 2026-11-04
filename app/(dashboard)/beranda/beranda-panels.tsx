@@ -1,6 +1,5 @@
 "use client"
 
-import * as React from "react"
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { ArrowRight, BedSingle, Stethoscope } from "lucide-react"
@@ -374,11 +373,17 @@ export function BerandaPanels({
                           {tool.nurseName || "-"}
                         </strong>
                       </span>
-                      {tool.notes && (
-                        <span className="text-[10px] text-muted-foreground/80 italic truncate">
-                          Catatan: {tool.notes}
-                        </span>
-                      )}
+                      {(() => {
+                        const cleanNote = tool.notes
+                          ? tool.notes.replace(/__ACTION_LOGS__[\s\S]*?__END_ACTION_LOGS__/g, "").replace(/__STATUS_SELESAI__/g, "").trim()
+                          : ""
+                        if (!cleanNote) return null
+                        return (
+                          <span className="text-[10px] text-muted-foreground/80 italic truncate">
+                            Catatan: {cleanNote}
+                          </span>
+                        )
+                      })()}
                     </div>
 
                     <div className="shrink-0 flex flex-col items-end gap-0.5">

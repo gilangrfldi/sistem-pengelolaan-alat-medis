@@ -24,6 +24,7 @@ import {
   Layers,
   History,
   Play,
+  Eye,
 } from "lucide-react"
 
 import { StatsSection, type StatItem } from "@/components/stats-section"
@@ -46,97 +47,40 @@ import {
 } from "@/lib/services/alat-service"
 import { fetchPatientsFromDb } from "@/lib/services/pasien-service"
 import { toast } from "@/components/ui/app-toast"
+import { ModalLaporRusak } from "./components/modal-lapor-rusak"
+import { REGULAR_BEDS, ISOLATION_BEDS, ALL_BEDS } from "@/lib/constants/beds"
+import { type StoredPatientRecord } from "@/lib/types/patient"
+import {
+  type ToolCategory,
+  type MasterTool,
+  type TimedToolUsageRecord,
+  type CountToolUsageRecord,
+  type DamagedToolRecord,
+  type CountActionLog,
+} from "@/lib/types/tool"
+import {
+  type ShiftInfo,
+  DEFAULT_SHIFT_INFO,
+  getShiftInfo,
+  getFormattedDate,
+  getFormattedTime,
+  formatDuration,
+  calculateMinutesDifference,
+} from "@/lib/utils/date-time"
 
-// ========================================================
-// TIPE DATA & INTERFACE KELOLA ALAT MEDIS HCU (2 KATEGORI: 'waktu' & 'kali')
-// ========================================================
-
-export type ToolCategory = "waktu" | "kali"
-
-export interface MasterTool {
-  id: string
-  name: string
-  category: ToolCategory
-  totalUnits: number // 0 jika tidak dibatasi / gas sentral
-  hasUnitNumber: boolean
-  unitNumberType?: "single" | "range"
-  numberedUnitsCount?: number // Misal 40 untuk Infus Pump (1-40)
-  unitStartNumber?: number // Nomor unit awal, misal 1
-  unitEndNumber?: number // Nomor unit akhir, misal 40
-  hasTotalUnits?: boolean
-  hasLocation?: boolean
-  applicableLocations?: string[] // Daftar lokasi pemasangan anatomi
-  subtypes?: string[]
-  description?: string
+export type {
+  ToolCategory,
+  MasterTool,
+  TimedToolUsageRecord,
+  CountToolUsageRecord,
+  DamagedToolRecord,
+  ShiftInfo,
 }
-
-export interface TimedToolUsageRecord {
-  id: string
-  bed: string
-  patientName: string
-  patientRm: string
-  toolName: string
-  unitNumber?: number
-  locations?: string[]
-  status: "berjalan" | "selesai"
-  startTimeStr: string
-  endTimeStr?: string
-  startedAtTimestamp: number
-  endedAtTimestamp?: number
-  durationMinutes: number
-  accumulatedMinutes: number
-  nurseName: string
-  stopNurseName?: string
-  shiftKey: string
-  notes?: string
-}
-
-export interface CountToolUsageRecord {
-  id: string
-  toolName: string
-  bed: string
-  patientName: string
-  patientRm: string
-  count: number
-  savedCount?: number
-  lastActionTime: string
-  nurseName: string
-  unitNumber?: number
-  notes?: string
-  status?: "draft" | "selesai"
-  createdAt?: string
-}
-
-export interface DamagedToolRecord {
-  id: string
-  toolName: string
-  quantity: number
-  unitNumbers: number[]
-  reportDate: string
-  severity: "rusak_ringan" | "rusak_berat"
-  notes: string
-  reportedBy: string
-}
-
-export interface ShiftInfo {
-  type: "pagi" | "siang" | "malam"
-  name: string
-  label: string
-  timeRange: string
-  nextShiftTime: string
-  shiftKey: string
-}
+export { REGULAR_BEDS, ISOLATION_BEDS, ALL_BEDS, getShiftInfo }
 
 // ========================================================
 // DATA MASTER & REFERENSI AWAL HCU
 // ========================================================
-
-const REGULAR_BEDS = Array.from({ length: 19 }, (_, i) => {
-  const num = String(i + 1).padStart(2, "0")
-  return `Bed ${num}`
-})
-const ISOLATION_BEDS = ["Isolasi 1", "Isolasi 2"]
-const ALL_BEDS = [...REGULAR_BEDS, ...ISOLATION_BEDS]
 
 const INITIAL_PATIENTS_MAP: Record<string, { name: string; rm: string; admissionDate?: string; admissionTime?: string }> = {}
 
@@ -297,42 +241,98 @@ export const INITIAL_TIMED_TOOLS: TimedToolUsageRecord[] = []
 export const INITIAL_COUNT_TOOLS: CountToolUsageRecord[] = []
 export const INITIAL_DAMAGED_TOOLS: DamagedToolRecord[] = []
 
-interface StoredPatientRecord {
-  bed: string
-  name: string
-  rm: string
-  status: string
-  admissionDate?: string
-  admissionTime?: string
+// Helper sinkronisasi & persistensi rincian aksi tindakan medis hitungan kali
+function getStorageKeyForActionLogs(bed: string, toolName: string) {
+  return `sp_hcu_action_logs_${bed.replace(/\s+/g, "_")}_${toolName.replace(/\s+/g, "_")}`
 }
 
-// Helper konversi menit ke format 'X jam Y menit'
-function formatDuration(minutes: number): string {
-  if (minutes < 1) return "< 1 menit"
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m} menit`
-  if (m === 0) return `${h} jam`
-  return `${h} jam ${m} menit`
+function loadActionLogsFromStorage(bed: string, toolName: string): CountActionLog[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = localStorage.getItem(getStorageKeyForActionLogs(bed, toolName))
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
-// Helper hitung selisih jam 'HH:mm' ke menit
-function calculateMinutesDifference(startStr: string, endStr: string): number {
-  const [sh, sm] = startStr.split(":").map(Number)
-  const [eh, em] = endStr.split(":").map(Number)
-  if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return 0
-  let diff = eh * 60 + em - (sh * 60 + sm)
-  if (diff < 0) diff += 24 * 60 // Lewat tengah malam
-  return diff
+function saveActionLogsToStorage(bed: string, toolName: string, logs: CountActionLog[]) {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(getStorageKeyForActionLogs(bed, toolName), JSON.stringify(logs))
+  } catch {}
 }
 
-const DEFAULT_SHIFT_INFO: ShiftInfo = {
-  type: "pagi",
-  name: "Pagi",
-  label: "Shift Pagi",
-  timeRange: "07.00 - 14.00 WIB",
-  nextShiftTime: "14.00 WIB",
-  shiftKey: "2026-10-30-pagi",
+function cleanDisplayNotes(notes?: string): string | undefined {
+  if (!notes) return undefined
+  const cleaned = notes
+    .replace(/__ACTION_LOGS__[\s\S]*?__END_ACTION_LOGS__/g, "")
+    .replace(/__STATUS_SELESAI__/g, "")
+    .trim()
+  return cleaned || undefined
+}
+
+function parseLogsFromNotes(notes?: string): CountActionLog[] | undefined {
+  if (!notes) return undefined
+  const match = notes.match(/__ACTION_LOGS__([\s\S]*?)__END_ACTION_LOGS__/)
+  if (match && match[1]) {
+    try {
+      const parsed = JSON.parse(match[1])
+      if (Array.isArray(parsed)) return parsed
+    } catch {}
+  }
+  return undefined
+}
+
+function encodeLogsIntoNotes(notes: string | undefined, logs: CountActionLog[]): string {
+  const clean = cleanDisplayNotes(notes) || ""
+  const tag = `__ACTION_LOGS__${JSON.stringify(logs)}__END_ACTION_LOGS__`
+  return clean ? `${clean} ${tag}` : tag
+}
+
+function getResolvedActionLogs(
+  bed: string,
+  toolName: string,
+  totalCount: number,
+  lastActionTime?: string,
+  nurseName?: string,
+  createdAt?: string,
+  existingLogs?: CountActionLog[],
+  notes?: string
+): CountActionLog[] {
+  let logs: CountActionLog[] = []
+  if (existingLogs && existingLogs.length > 0) {
+    logs = [...existingLogs]
+  } else {
+    const fromNotes = parseLogsFromNotes(notes)
+    if (fromNotes && fromNotes.length > 0) {
+      logs = [...fromNotes]
+    } else {
+      logs = loadActionLogsFromStorage(bed, toolName)
+    }
+  }
+
+  const sumCount = logs.reduce((acc, l) => acc + (l.countAdded || 0), 0)
+  if (sumCount < totalCount) {
+    const missing = totalCount - sumCount
+    const baseTimeStr = lastActionTime?.includes("(")
+      ? lastActionTime.split("(")[0].trim()
+      : lastActionTime || "Sesuai Jadwal"
+    const baseLog: CountActionLog = {
+      id: `act-synth-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timeStr: baseTimeStr,
+      dateStr: getFormattedDate(new Date()),
+      countAdded: missing,
+      nurseName: nurseName || "Perawat HCU",
+      timestamp: createdAt ? new Date(createdAt).getTime() - 1000 * 60 * 15 : Date.now() - 1000 * 60 * 15,
+    }
+    logs = [baseLog, ...logs]
+  }
+
+  saveActionLogsToStorage(bed, toolName, logs)
+  return logs
 }
 
 export default function KelolaAlatPage() {
@@ -551,6 +551,37 @@ export default function KelolaAlatPage() {
 
   const [savingCountId, setSavingCountId] = useState<string | null>(null)
 
+  // 7. Modal Detail Riwayat Tindakan Medis
+  const [selectedHistoryDetail, setSelectedHistoryDetail] = useState<{
+    id: string
+    toolName: string
+    category: "waktu" | "kali"
+    unitNumber?: number
+    locations?: string[]
+    status: "berjalan" | "selesai"
+    timeRange: string
+    durationText?: string
+    startNurse: string
+    stopNurse?: string
+    timestamp: number
+    totalCount?: number
+    latestActionTime?: string
+    actionLogs?: CountActionLog[]
+  } | null>(null)
+
+  // 8. Paginasi Panel Bed Terpilih
+  const [timedPage, setTimedPage] = useState(1)
+  const [countPage, setCountPage] = useState(1)
+  const [historyPage, setHistoryPage] = useState(1)
+  const [prevBed, setPrevBed] = useState("Bed 01")
+
+  if (prevBed !== selectedBedForPanel) {
+    setPrevBed(selectedBedForPanel)
+    setTimedPage(1)
+    setCountPage(1)
+    setHistoryPage(1)
+  }
+
   // ========================================================
   // MAP & DERIVED STATE (UNIT TERPAKAI & RUSAK)
   // ========================================================
@@ -679,7 +710,8 @@ export default function KelolaAlatPage() {
     }
     setFormUnitNumber(null)
     setFormTimeMode("now")
-    setFormManualStart("08:00")
+    const nowTimeStr = getFormattedTime(new Date()).slice(0, 5)
+    setFormManualStart(nowTimeStr)
     setFormManualEnd("")
     setFormCountNumber(1)
     setFormNotes("")
@@ -836,18 +868,52 @@ export default function KelolaAlatPage() {
         return
       }
 
+      // Resolusi waktu tindakan hitungan kali sesuai opsi yang dipilih
+      let resolvedActionTime = nowTimeStr
+      if (formTimeMode === "admission") {
+        resolvedActionTime = patient.admissionTime ? patient.admissionTime.replace(" WIB", "").trim() : nowTimeStr
+      } else {
+        // Mode "now": default jam sekarang atau waktu tindakan yang disesuaikan perawat
+        resolvedActionTime = formManualStart || nowTimeStr
+      }
+
+      const fullActionTimeStr = `${resolvedActionTime} WIB (${getFormattedDate(now)})`
+      const nowIso = new Date().toISOString()
+      const newLog: CountActionLog = {
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timeStr: `${resolvedActionTime} WIB`,
+        dateStr: getFormattedDate(now),
+        countAdded: formCountNumber,
+        nurseName: currentNurse,
+        timestamp: Date.now(),
+      }
+
       // Cek apakah sudah ada catatan untuk bed ini
       const existing = countTools.find((c) => c.bed === formBed && c.toolName === formToolName)
-      const fullActionTimeStr = `${nowTimeStr} WIB (${getFormattedDate(now)})`
-      const nowIso = new Date().toISOString()
       if (existing) {
         const nextCount = (existing.savedCount ?? existing.count) + formCountNumber
+        const baseLogs = getResolvedActionLogs(
+          formBed,
+          formToolName,
+          existing.savedCount ?? existing.count,
+          existing.lastActionTime,
+          existing.nurseName,
+          existing.createdAt,
+          existing.actionLogs,
+          existing.notes
+        )
+        const updatedLogs = [...baseLogs, newLog]
+        saveActionLogsToStorage(formBed, formToolName, updatedLogs)
+        const encodedNotes = encodeLogsIntoNotes(existing.notes, updatedLogs)
+
         try {
           await updateCountToolInDb(existing.id, {
             count: nextCount,
             lastActionTime: fullActionTimeStr,
             nurseName: currentNurse,
             status: "selesai",
+            notes: encodedNotes,
+            actionLogs: updatedLogs,
           })
         } catch (err) {
           console.warn("DB offline update count:", err)
@@ -863,11 +929,17 @@ export default function KelolaAlatPage() {
                   nurseName: currentNurse,
                   status: "selesai",
                   createdAt: nowIso,
+                  notes: cleanDisplayNotes(existing.notes),
+                  actionLogs: updatedLogs,
                 }
               : c
           )
         )
       } else {
+        const logs = [newLog]
+        saveActionLogsToStorage(formBed, formToolName, logs)
+        const encodedNotes = encodeLogsIntoNotes(formNotes || undefined, logs)
+
         const payload: Omit<CountToolUsageRecord, "id"> = {
           toolName: formToolName,
           bed: formBed,
@@ -877,8 +949,9 @@ export default function KelolaAlatPage() {
           savedCount: formCountNumber,
           lastActionTime: fullActionTimeStr,
           nurseName: currentNurse,
-          notes: formNotes || undefined,
+          notes: encodedNotes,
           status: "selesai",
+          actionLogs: logs,
         }
 
         try {
@@ -890,6 +963,8 @@ export default function KelolaAlatPage() {
               savedCount: formCountNumber,
               status: "selesai",
               createdAt: saved.createdAt || nowIso,
+              notes: cleanDisplayNotes(formNotes),
+              actionLogs: logs,
             },
             ...prev,
           ])
@@ -899,6 +974,8 @@ export default function KelolaAlatPage() {
             id: `count-${Date.now()}`,
             ...payload,
             createdAt: nowIso,
+            notes: cleanDisplayNotes(formNotes),
+            actionLogs: logs,
           }
           setCountTools((prev) => [fallback, ...prev])
         }
@@ -1040,6 +1117,33 @@ export default function KelolaAlatPage() {
     const nowTimeStr = getFormattedTime(now).slice(0, 5)
     const fullActionTimeStr = `${nowTimeStr} WIB (${getFormattedDate(now)})`
 
+    const countDiff = target.count - (target.savedCount ?? 0)
+    const diffToAdd = countDiff > 0 ? countDiff : 1
+    const priorCount = target.savedCount ?? Math.max(1, target.count - diffToAdd)
+
+    const baseLogs = getResolvedActionLogs(
+      target.bed,
+      target.toolName,
+      priorCount,
+      target.lastActionTime,
+      target.nurseName,
+      target.createdAt,
+      target.actionLogs,
+      target.notes
+    )
+
+    const newLog: CountActionLog = {
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timeStr: `${nowTimeStr} WIB`,
+      dateStr: getFormattedDate(now),
+      countAdded: diffToAdd,
+      nurseName: currentNurse,
+      timestamp: Date.now(),
+    }
+    const updatedActionLogs = [...baseLogs, newLog]
+    saveActionLogsToStorage(target.bed, target.toolName, updatedActionLogs)
+    const encodedNotes = encodeLogsIntoNotes(target.notes, updatedActionLogs)
+
     setSavingCountId(id)
     try {
       await updateCountToolInDb(id, {
@@ -1047,7 +1151,8 @@ export default function KelolaAlatPage() {
         lastActionTime: fullActionTimeStr,
         nurseName: currentNurse,
         status: "selesai",
-        notes: target.notes,
+        notes: encodedNotes,
+        actionLogs: updatedActionLogs,
       })
     } catch (err) {
       console.warn("DB offline update count:", err)
@@ -1064,6 +1169,8 @@ export default function KelolaAlatPage() {
               lastActionTime: fullActionTimeStr,
               nurseName: currentNurse,
               status: "selesai",
+              notes: cleanDisplayNotes(target.notes),
+              actionLogs: updatedActionLogs,
               createdAt: new Date().toISOString(),
             }
           : c
@@ -1256,6 +1363,9 @@ export default function KelolaAlatPage() {
       startNurse: string
       stopNurse?: string
       timestamp: number
+      totalCount?: number
+      latestActionTime?: string
+      actionLogs?: CountActionLog[]
     }[] = []
 
     // 1. Alat Hitungan Waktu - HANYA YANG SUDAH DILEPAS / SELESAI
@@ -1280,24 +1390,85 @@ export default function KelolaAlatPage() {
         })
       })
 
-    // 2. Alat Hitungan Kali (Tindakan Medis) - HANYA YANG SUDAH DISIMPAN DI DATABASE
+    // 2. Alat Hitungan Kali (Tindakan Medis) - DI-AGREGASI BERDASARKAN NAMA ALAT
+    const countByTool = new Map<string, CountToolUsageRecord[]>()
     countTools
       .filter((c) => c.bed === selectedBedForPanel && c.status === "selesai")
       .forEach((c) => {
-        list.push({
-          id: c.id,
-          toolName: c.toolName,
-          category: "kali",
-          status: "selesai",
-          timeRange: `${c.lastActionTime}`,
-          durationText: `${c.savedCount ?? c.count}x Tindakan`,
-          startNurse: c.nurseName,
-          timestamp: c.createdAt ? new Date(c.createdAt).getTime() : 0,
-        })
+        const arr = countByTool.get(c.toolName) || []
+        arr.push(c)
+        countByTool.set(c.toolName, arr)
       })
+
+    countByTool.forEach((records, toolName) => {
+      const totalCount = records.reduce((sum, r) => sum + (r.savedCount ?? r.count), 0)
+      const sorted = [...records].sort((a, b) => {
+        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        return tB - tA
+      })
+      const latest = sorted[0]
+
+      const combinedLogs: CountActionLog[] = []
+      records.forEach((r) => {
+        if (r.actionLogs && r.actionLogs.length > 0) {
+          combinedLogs.push(...r.actionLogs)
+        }
+      })
+
+      const resolvedLogs = getResolvedActionLogs(
+        selectedBedForPanel,
+        toolName,
+        totalCount,
+        latest.lastActionTime,
+        latest.nurseName,
+        latest.createdAt,
+        combinedLogs.length > 0 ? combinedLogs : undefined,
+        latest.notes
+      )
+      const sortedLogs = [...resolvedLogs].sort((a, b) => b.timestamp - a.timestamp)
+
+      list.push({
+        id: `agg-count-${toolName}`,
+        toolName: toolName,
+        category: "kali",
+        status: "selesai",
+        timeRange: latest.lastActionTime,
+        latestActionTime: latest.lastActionTime,
+        totalCount: totalCount,
+        durationText: `${totalCount}x Tindakan`,
+        startNurse: latest.nurseName,
+        timestamp: latest.createdAt ? new Date(latest.createdAt).getTime() : 0,
+        actionLogs: sortedLogs,
+      })
+    })
 
     return list.sort((a, b) => b.timestamp - a.timestamp)
   }, [timedTools, countTools, selectedBedForPanel])
+
+  // Paginasi Alat Hitungan Waktu (Maks 5 data)
+  const TIMED_PER_PAGE = 5
+  const totalTimedPages = Math.ceil(currentBedTimed.length / TIMED_PER_PAGE) || 1
+  const paginatedTimed = useMemo(() => {
+    const start = (timedPage - 1) * TIMED_PER_PAGE
+    return currentBedTimed.slice(start, start + TIMED_PER_PAGE)
+  }, [currentBedTimed, timedPage])
+
+  // Paginasi Tindakan Medis (Maks 5 data)
+  const COUNT_PER_PAGE = 5
+  const totalCountPages = Math.ceil(currentBedCount.length / COUNT_PER_PAGE) || 1
+  const paginatedCount = useMemo(() => {
+    const start = (countPage - 1) * COUNT_PER_PAGE
+    return currentBedCount.slice(start, start + COUNT_PER_PAGE)
+  }, [currentBedCount, countPage])
+
+  // Paginasi Riwayat Bed (Maks 10 data)
+  const HISTORY_PER_PAGE = 10
+  const totalHistoryPages = Math.ceil(currentBedHistory.length / HISTORY_PER_PAGE) || 1
+  const paginatedHistory = useMemo(() => {
+    const start = (historyPage - 1) * HISTORY_PER_PAGE
+    return currentBedHistory.slice(start, start + HISTORY_PER_PAGE)
+  }, [currentBedHistory, historyPage])
 
   // ========================================================
   // RENDER UTAMA HALAMAN KELOLA ALAT
@@ -1472,8 +1643,8 @@ export default function KelolaAlatPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {/* Alat Waktu */}
-                    {currentBedTimed.map((timeItem) => (
+                    {/* Alat Waktu Terpaginasi */}
+                    {paginatedTimed.map((timeItem) => (
                       <div
                         key={timeItem.id}
                         className={cn(
@@ -1483,9 +1654,9 @@ export default function KelolaAlatPage() {
                             : "border-neutral-200 bg-neutral-50/40 dark:bg-neutral-800/30"
                         )}
                       >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs sm:text-sm text-neutral-900 dark:text-neutral-100">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-xs sm:text-sm text-neutral-900 dark:text-neutral-100 break-words">
                               {timeItem.toolName}
                             </span>
                             {timeItem.unitNumber && (
@@ -1549,14 +1720,14 @@ export default function KelolaAlatPage() {
                               )
                             )}
                           </div>
-                          {timeItem.notes && (
-                            <div className="text-[10px] text-muted-foreground/90 italic truncate mt-0.5">
-                              Catatan: {timeItem.notes}
+                          {cleanDisplayNotes(timeItem.notes) && (
+                            <div className="text-[10px] text-muted-foreground/90 italic break-words mt-0.5">
+                              Catatan: {cleanDisplayNotes(timeItem.notes)}
                             </div>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 self-start sm:self-center">
+                        <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
                           {timeItem.status === "berjalan" && (
                             <button
                               type="button"
@@ -1579,11 +1750,38 @@ export default function KelolaAlatPage() {
                       </div>
                     ))}
 
+                    {/* Kontrol Paginasi Hitungan Waktu */}
+                    {currentBedTimed.length > 5 && (
+                      <div className="flex items-center justify-between pt-2.5 border-t border-neutral-100 dark:border-neutral-800 text-xs text-muted-foreground mt-2">
+                        <span>Total {currentBedTimed.length} alat</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={timedPage <= 1}
+                            onClick={() => setTimedPage((p) => Math.max(1, p - 1))}
+                            className="px-2.5 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-neutral-700 transition cursor-pointer"
+                          >
+                            Sebelumnya
+                          </button>
+                          <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                            {timedPage} / {totalTimedPages}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={timedPage >= totalTimedPages}
+                            onClick={() => setTimedPage((p) => Math.min(totalTimedPages, p + 1))}
+                            className="px-2.5 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-neutral-700 transition cursor-pointer"
+                          >
+                            Selanjutnya
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* 2. Alat Hitungan Kali (Tindakan) */}
+              {/* 2. Alat Hitungan Kali (Tindakan Medis) */}
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-2.5">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -1597,81 +1795,114 @@ export default function KelolaAlatPage() {
                     Belum ada tindakan medis yang dicatat di bed ini.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {currentBedCount.map((c) => (
-                      <div
-                        key={c.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-2xs gap-2.5"
-                      >
-                        <div className="min-w-0">
-                          <div className="font-semibold text-xs text-neutral-900 dark:text-neutral-100 truncate">
-                            {c.toolName}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground">Terakhir: {c.lastActionTime}</div>
-                          {c.notes && (
-                            <div className="text-[10px] text-muted-foreground/90 italic truncate mt-0.5">
-                              Catatan: {c.notes}
+                  <div className="flex flex-col gap-2.5">
+                    {paginatedCount.map((c) => {
+                      const isDirty = c.count !== (c.savedCount ?? c.count)
+                      return (
+                        <div
+                          key={c.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-2xs gap-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-xs sm:text-sm text-neutral-900 dark:text-neutral-100 break-words">
+                              {c.toolName}
                             </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5 self-end sm:self-center">
-                          {/* Stepper Counter */}
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateCountDraft(c.id, -1)}
-                              className="size-6 rounded border border-neutral-200 dark:border-neutral-700 flex items-center justify-center font-bold text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
-                              title="Kurangi frekuensi tindakan"
-                            >
-                              -
-                            </button>
-                            <span className="px-2 py-0.5 rounded bg-neutral-900 text-white font-mono text-xs font-bold">
-                              {c.count}x
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateCountDraft(c.id, 1)}
-                              className="size-6 rounded border border-neutral-200 dark:border-neutral-700 flex items-center justify-center font-bold text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
-                              title="Tambah frekuensi tindakan"
-                            >
-                              +
-                            </button>
+                            <div className="text-[11px] text-muted-foreground mt-0.5">
+                              Terakhir: <strong className="text-neutral-700 dark:text-neutral-300">{c.lastActionTime}</strong>
+                            </div>
+                            {cleanDisplayNotes(c.notes) && (
+                              <div className="text-[10px] text-muted-foreground/90 italic break-words mt-0.5">
+                                Catatan: {cleanDisplayNotes(c.notes)}
+                              </div>
+                            )}
                           </div>
 
-                          {/* Tombol Simpan (Masuk ke Rekap & Riwayat) */}
-                          <button
-                            type="button"
-                            disabled={savingCountId === c.id}
-                            onClick={() => handleSaveCountTool(c.id)}
-                            className={cn(
-                              "inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg text-white shadow-xs transition cursor-pointer disabled:opacity-50",
-                              c.count !== (c.savedCount ?? c.count)
-                                ? "bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-400 ring-offset-1 dark:ring-offset-neutral-900"
-                                : "bg-emerald-600 hover:bg-emerald-700"
-                            )}
-                            title={
-                              c.count !== (c.savedCount ?? c.count)
-                                ? `Simpan perubahan (${c.savedCount ?? c.count}x ➔ ${c.count}x) ke riwayat`
-                                : "Simpan tindakan ini ke rekap dan riwayat"
-                            }
-                          >
-                            <Check className="size-3" />
-                            <span>Simpan</span>
-                          </button>
+                          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                            {/* Stepper Counter */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateCountDraft(c.id, -1)}
+                                className="size-7 rounded-lg border border-neutral-200 dark:border-neutral-700 flex items-center justify-center font-bold text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
+                                title="Kurangi frekuensi tindakan"
+                              >
+                                -
+                              </button>
+                              <span className="px-2.5 py-1 rounded-lg bg-neutral-900 text-white font-mono text-xs font-bold">
+                                {c.count}x
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateCountDraft(c.id, 1)}
+                                className="size-7 rounded-lg border border-neutral-200 dark:border-neutral-700 flex items-center justify-center font-bold text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
+                                title="Tambah frekuensi tindakan"
+                              >
+                                +
+                              </button>
+                            </div>
 
-                          {/* Tombol Hapus (Popup Konfirmasi) */}
+                            {/* Tombol Simpan (Status Aktif jika Berubah, Redup/Muted jika Tidak Berubah) */}
+                            <button
+                              type="button"
+                              disabled={savingCountId === c.id || !isDirty}
+                              onClick={() => handleSaveCountTool(c.id)}
+                              className={cn(
+                                "inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg text-white shadow-xs transition",
+                                !isDirty
+                                  ? "opacity-40 cursor-not-allowed bg-emerald-600/50"
+                                  : "bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-400 ring-offset-1 dark:ring-offset-neutral-900 cursor-pointer"
+                              )}
+                              title={
+                                isDirty
+                                  ? `Simpan perubahan (${c.savedCount ?? c.count}x ➔ ${c.count}x) ke riwayat`
+                                  : "Frekuensi belum diubah. Klik (+) atau (-) untuk mengubah dan menyimpan."
+                              }
+                            >
+                              <Check className="size-3.5" />
+                              <span>Simpan</span>
+                            </button>
+
+                            {/* Tombol Hapus (Popup Konfirmasi) */}
+                            <button
+                              type="button"
+                              onClick={() => handleRequestDeleteCount(c)}
+                              title="Hapus rekaman tindakan ini"
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+
+                    {/* Kontrol Paginasi Tindakan Medis */}
+                    {currentBedCount.length > 5 && (
+                      <div className="flex items-center justify-between pt-2.5 border-t border-neutral-100 dark:border-neutral-800 text-xs text-muted-foreground mt-2">
+                        <span>Total {currentBedCount.length} tindakan</span>
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleRequestDeleteCount(c)}
-                            title="Hapus rekaman tindakan ini"
-                            className="p-1 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
+                            disabled={countPage <= 1}
+                            onClick={() => setCountPage((p) => Math.max(1, p - 1))}
+                            className="px-2.5 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-neutral-700 transition cursor-pointer"
                           >
-                            <Trash2 className="size-4" />
+                            Sebelumnya
+                          </button>
+                          <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                            {countPage} / {totalCountPages}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={countPage >= totalCountPages}
+                            onClick={() => setCountPage((p) => Math.min(totalCountPages, p + 1))}
+                            className="px-2.5 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-neutral-700 transition cursor-pointer"
+                          >
+                            Selanjutnya
                           </button>
                         </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
@@ -1690,15 +1921,15 @@ export default function KelolaAlatPage() {
                     Belum ada riwayat aktivitas pemasangan atau penggunaan alat di bed ini.
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-72 overflow-y-auto pr-2 sm:pr-2.5">
-                    {currentBedHistory.map((item) => (
+                  <div className="space-y-2">
+                    {paginatedHistory.map((item) => (
                       <div
                         key={item.id}
                         className="p-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-800/40 text-xs space-y-1.5"
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 font-bold text-neutral-900 dark:text-neutral-100">
-                            <span>{item.toolName}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5 font-bold text-neutral-900 dark:text-neutral-100 min-w-0">
+                            <span className="break-words">{item.toolName}</span>
                             {item.unitNumber && (
                               <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-neutral-900 text-white dark:bg-neutral-700">
                                 #{item.unitNumber}
@@ -1717,20 +1948,35 @@ export default function KelolaAlatPage() {
                               </div>
                             )}
                           </div>
-                          <span
-                            className={cn(
-                              "px-2 py-0.5 rounded-full text-[10px] font-semibold",
-                              item.status === "berjalan"
-                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                                : "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300"
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span
+                              className={cn(
+                                "px-2 py-0.5 rounded-full text-[10px] font-semibold",
+                                item.status === "berjalan"
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                  : "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300"
+                              )}
+                            >
+                              {item.status === "berjalan" ? "Aktif / Berjalan" : "Selesai / Dilepas"}
+                            </span>
+
+                            {/* Tombol Detail Riwayat Tindakan (Icon mata dengan rounded biru dan icon putih) */}
+                            {item.category === "kali" && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedHistoryDetail(item)}
+                                title="Lihat rincian jam tindakan medis ini"
+                                className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg shadow-xs transition cursor-pointer flex items-center justify-center shrink-0"
+                              >
+                                <Eye className="size-3.5 text-white" />
+                              </button>
                             )}
-                          >
-                            {item.status === "berjalan" ? "Aktif / Berjalan" : "Selesai / Dilepas"}
-                          </span>
+                          </div>
                         </div>
 
                         <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <div>
+                          <div className="break-words">
                             Waktu: <strong className="text-neutral-700 dark:text-neutral-300">{item.timeRange}</strong>
                           </div>
                           {item.durationText && (
@@ -1741,22 +1987,50 @@ export default function KelolaAlatPage() {
                           )}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 border-t border-neutral-200/60 dark:border-neutral-700/60 text-[11px]">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 border-t border-neutral-200/60 dark:border-neutral-700/60 text-[11px] break-words">
                           <div className="flex items-center gap-1">
                             <span className="text-muted-foreground">
                               {item.category === "kali" ? "Dicatat oleh:" : "Dipasang / Dimulai oleh:"}
                             </span>
-                            <strong className="text-neutral-800 dark:text-neutral-200">{item.startNurse}</strong>
+                            <strong className="text-neutral-800 dark:text-neutral-200 break-words">{item.startNurse}</strong>
                           </div>
                           {item.category === "waktu" && item.status === "selesai" && item.stopNurse && (
                             <div className="flex items-center gap-1">
                               <span className="text-muted-foreground">Dilepas / Dihentikan oleh:</span>
-                              <strong className="text-[#512da8] dark:text-purple-300">{item.stopNurse}</strong>
+                              <strong className="text-[#512da8] dark:text-purple-300 break-words">{item.stopNurse}</strong>
                             </div>
                           )}
                         </div>
                       </div>
                     ))}
+
+                    {/* Kontrol Paginasi Riwayat */}
+                    {currentBedHistory.length > 10 && (
+                      <div className="flex items-center justify-between pt-2.5 border-t border-neutral-100 dark:border-neutral-800 text-xs text-muted-foreground mt-2">
+                        <span>Total {currentBedHistory.length} riwayat</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={historyPage <= 1}
+                            onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                            className="px-2.5 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-neutral-700 transition cursor-pointer"
+                          >
+                            Sebelumnya
+                          </button>
+                          <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                            {historyPage} / {totalHistoryPages}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={historyPage >= totalHistoryPages}
+                            onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
+                            className="px-2.5 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-neutral-700 transition cursor-pointer"
+                          >
+                            Selanjutnya
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1839,7 +2113,7 @@ export default function KelolaAlatPage() {
                   : "bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700"
               )}
             >
-              1. Hitungan Waktu
+              Hitungan Waktu
             </button>
 
             <button
@@ -1850,6 +2124,12 @@ export default function KelolaAlatPage() {
                 setFormToolName(firstCount)
                 setFormLocations([])
                 setFormUnitNumber(null)
+                if (formTimeMode === "manual") {
+                  setFormTimeMode("now")
+                }
+                if (!formManualStart) {
+                  setFormManualStart(getFormattedTime(new Date()).slice(0, 5))
+                }
               }}
               className={cn(
                 "p-2.5 rounded-xl border text-xs font-semibold text-center transition cursor-pointer",
@@ -1858,7 +2138,7 @@ export default function KelolaAlatPage() {
                   : "bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700"
               )}
             >
-              2. Hitungan Kali
+              Hitungan Kali
             </button>
           </div>
         </div>
@@ -2159,7 +2439,7 @@ export default function KelolaAlatPage() {
         })()}
 
         {formCategory === "kali" && (
-          <div className="space-y-3 p-3.5 rounded-xl border border-purple-100 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/20">
+          <div className="space-y-3.5 p-3.5 rounded-xl border border-purple-100 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/20">
             <div>
               <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1">
                 Pilih Alat Hitungan Kali *
@@ -2177,6 +2457,93 @@ export default function KelolaAlatPage() {
                     </option>
                   ))}
               </select>
+            </div>
+
+            {/* Pilihan Waktu Pelaksanaan Tindakan */}
+            <div>
+              <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
+                Waktu Pelaksanaan Tindakan:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
+                {/* 1. Input Waktu Tindakan Langsung (Default Waktu Sekarang & Dapat Diedit) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
+                      Waktu Sekarang (Dapat Diedit):
+                    </span>
+                    {formTimeMode === "now" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nowStr = getFormattedTime(new Date()).slice(0, 5)
+                          setFormManualStart(nowStr)
+                        }}
+                        className="text-[10px] text-[#512da8] dark:text-purple-400 hover:underline cursor-pointer"
+                      >
+                        Reset Jam Sekarang
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="time"
+                    value={formManualStart || getFormattedTime(new Date()).slice(0, 5)}
+                    onFocus={() => setFormTimeMode("now")}
+                    onChange={(e) => {
+                      setFormManualStart(e.target.value)
+                      setFormTimeMode("now")
+                    }}
+                    required
+                    className={cn(
+                      "w-full h-10 px-3 text-sm font-semibold rounded-xl bg-white dark:bg-neutral-800 border transition cursor-pointer",
+                      formTimeMode === "now"
+                        ? "border-[#512da8] ring-1 ring-[#512da8] text-neutral-900 dark:text-neutral-100"
+                        : "border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400"
+                    )}
+                  />
+                </div>
+
+                {/* 2. Opsi Sesuai Jam Masuk Pasien */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
+                      Opsi Jam Masuk Pasien:
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormTimeMode("admission")
+                      const adm = activePatientsMap[formBed]?.admissionTime?.replace(" WIB", "").trim()
+                      if (adm) {
+                        setFormManualStart(adm)
+                      }
+                    }}
+                    className={cn(
+                      "w-full h-10 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer text-center",
+                      formTimeMode === "admission"
+                        ? "bg-sky-600 text-white border-sky-700 shadow-xs"
+                        : "bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50"
+                    )}
+                  >
+                    <Clock className="size-3.5" />
+                    <span>
+                      Sesuai Jam Masuk ({activePatientsMap[formBed]?.admissionTime?.replace(" WIB", "") || "Pasien"})
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {formTimeMode === "admission" && (
+                <div className="p-2.5 rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/20 text-sky-800 dark:text-sky-300 text-xs flex items-center gap-2 mt-2">
+                  <CheckCircle2 className="size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                  <span>
+                    Waktu tindakan dicatat sesuai jam masuk pasien:{" "}
+                    <strong>
+                      pukul {activePatientsMap[formBed]?.admissionTime || "00:00"} WIB
+                    </strong>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -2301,213 +2668,28 @@ export default function KelolaAlatPage() {
       {/* ======================================================== */}
       {/* MODAL 3: LAPOR ALAT RUSAK / PEMELIHARAAN */}
       {/* ======================================================== */}
-      <AppModal
+      <ModalLaporRusak
         isOpen={showDamageModal}
         onClose={() => setShowDamageModal(false)}
         title="Lapor Alat Rusak / Perbaikan"
         subtitle="Alat yang rusak otomatis dinonaktifkan dari pemilihan alat pasien"
-        icon={<Wrench className="size-5 text-rose-500" />}
-        onSubmit={handleSubmitDamage}
         submitText="Simpan Laporan Kerusakan"
-        submitVariant="danger"
-        maxWidth="md"
-      >
-        {dmgError && (
-          <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200">
-            <AlertCircle className="size-4 shrink-0" />
-            <span>{dmgError}</span>
-          </div>
-        )}
-
-        <div className="space-y-3.5">
-          <div>
-            <label className="block text-xs font-semibold mb-1">Pilih Alat Rusak *</label>
-            <select
-              value={dmgToolName}
-              onChange={(e) => {
-                setDmgToolName(e.target.value)
-                setDmgSelectedNumbers([])
-                setDmgQuantity(1)
-                setDmgError(null)
-              }}
-              className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background cursor-pointer"
-            >
-              {masterTools.map((m) => (
-                <option key={m.id} value={m.name}>
-                  {m.name}{" "}
-                  {m.hasUnitNumber
-                    ? `(Unit #${m.unitStartNumber || 1}-${m.unitEndNumber || m.totalUnits})`
-                    : m.totalUnits > 0
-                    ? `(${m.totalUnits} unit)`
-                    : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Kondisi Dinamis Form Lapor Rusak Berdasarkan Jenis Master Tool */}
-          {(() => {
-            const target = masterTools.find((m) => m.name === dmgToolName)
-
-            // Kondisi 1: Memiliki Nomor Unit Fisik -> Tampilkan Grid Chip Nomor (bisa multi-select)
-            if (target?.hasUnitNumber) {
-              const start = target.unitStartNumber || 1
-              const end = target.unitEndNumber || target.totalUnits || 21
-              const total = Math.max(1, end - start + 1)
-
-              // Nomor unit yang sudah berstatus rusak saat ini
-              const alreadyDamagedNumbers = new Set(
-                damagedTools
-                  .filter((d) => d.toolName === dmgToolName)
-                  .flatMap((d) => d.unitNumbers)
-              )
-
-              return (
-                <div className="space-y-2 p-3 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/30 dark:bg-rose-950/20">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-neutral-900 dark:text-neutral-100">
-                      Pilih Nomor Unit {target.name} yang Rusak *
-                    </label>
-                    <div className="flex items-center gap-2 text-[10px]">
-                      <span className="flex items-center gap-1 text-neutral-800 dark:text-neutral-200">
-                        <span className="size-2 rounded bg-neutral-900 dark:bg-white" /> Dipilih
-                      </span>
-                      <span className="flex items-center gap-1 text-rose-600">
-                        <span className="size-2 rounded bg-rose-200 border border-rose-400" /> Sudah Rusak
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-8 sm:grid-cols-10 gap-1.5 max-h-40 overflow-y-auto p-2 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800">
-                    {Array.from({ length: total }, (_, i) => start + i).map((num) => {
-                      const isAlreadyDamaged = alreadyDamagedNumbers.has(num)
-                      const isSelected = dmgSelectedNumbers.includes(num)
-
-                      return (
-                        <button
-                          key={num}
-                          type="button"
-                          disabled={isAlreadyDamaged}
-                          onClick={() => {
-                            setDmgSelectedNumbers((prev) => {
-                              const next = prev.includes(num)
-                                ? prev.filter((n) => n !== num)
-                                : [...prev, num]
-                              setDmgQuantity(Math.max(1, next.length))
-                              return next
-                            })
-                          }}
-                          title={
-                            isAlreadyDamaged
-                              ? `Unit #${num}: Sudah dilaporkan rusak`
-                              : isSelected
-                              ? `Unit #${num}: Dipilih rusak (klik untuk batal)`
-                              : `Unit #${num}: Klik untuk pilih rusak`
-                          }
-                          className={cn(
-                            "py-1.5 rounded text-xs font-bold transition text-center cursor-pointer select-none",
-                            isSelected
-                              ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-xs"
-                              : isAlreadyDamaged
-                              ? "bg-rose-100 text-rose-500 border border-rose-300 cursor-not-allowed line-through opacity-70"
-                              : "bg-neutral-100 text-neutral-700 hover:bg-rose-600 hover:text-white"
-                          )}
-                        >
-                          {num}
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs font-semibold pt-1 text-rose-800 dark:text-rose-300">
-                    <span>
-                      Unit Terpilih:{" "}
-                      {dmgSelectedNumbers.length > 0
-                        ? `#${[...dmgSelectedNumbers].sort((a, b) => a - b).join(", #")}`
-                        : "Belum ada unit yang dipilih"}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-rose-200/70 text-rose-900 text-[11px] font-bold">
-                      Total: {dmgSelectedNumbers.length} Unit
-                    </span>
-                  </div>
-                </div>
-              )
-            }
-
-            // Kondisi 2: Tidak Memiliki Nomor Unit, Tapi Memiliki Jumlah Unit Fisik
-            if (target && target.totalUnits > 0) {
-              return (
-                <div>
-                  <label className="block text-xs font-semibold mb-1">
-                    Jumlah Unit Rusak (Tersedia {target.totalUnits} Unit di Ruangan HCU) *
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={target.totalUnits}
-                    value={dmgQuantity}
-                    onChange={(e) =>
-                      setDmgQuantity(
-                        Math.max(
-                          1,
-                          Math.min(target.totalUnits, parseInt(e.target.value) || 1)
-                        )
-                      )
-                    }
-                    className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background font-mono font-bold"
-                  />
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Alat ini tidak memiliki nomor unit fisik. Masukkan berapa unit yang mengalami kerusakan.
-                  </p>
-                </div>
-              )
-            }
-
-            // Kondisi 3: Tidak Memiliki Jumlah Unit Maupun Nomor Unit
-            return (
-              <div>
-                <label className="block text-xs font-semibold mb-1">Jumlah Unit Rusak *</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={dmgQuantity}
-                  onChange={(e) =>
-                    setDmgQuantity(Math.max(1, parseInt(e.target.value) || 1))
-                  }
-                  className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background font-mono font-bold"
-                />
-              </div>
-            )
-          })()}
-
-          <div>
-            <label className="block text-xs font-semibold mb-1">Tingkat Kerusakan</label>
-            <select
-              value={dmgSeverity}
-              onChange={(e) =>
-                setDmgSeverity(
-                  e.target.value as "rusak_ringan" | "rusak_berat"
-                )
-              }
-              className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background"
-            >
-              <option value="rusak_ringan">Rusak Ringan (Kendala Sensor/Kabel)</option>
-              <option value="rusak_berat">Rusak Berat (Tidak Berfungsi)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold mb-1">Keterangan Kerusakan</label>
-            <textarea
-              rows={2}
-              value={dmgNotes}
-              onChange={(e) => setDmgNotes(e.target.value)}
-              placeholder="Jelaskan kendala kerusakan alat..."
-              className="w-full text-xs sm:text-sm p-2 rounded-lg border border-border bg-background"
-            />
-          </div>
-        </div>
-      </AppModal>
+        masterTools={masterTools}
+        damagedTools={damagedTools}
+        dmgSelectedTool={dmgToolName}
+        setDmgSelectedTool={setDmgToolName}
+        dmgSelectedNumbers={dmgSelectedNumbers}
+        setDmgSelectedNumbers={setDmgSelectedNumbers}
+        dmgQuantity={dmgQuantity}
+        setDmgQuantity={setDmgQuantity}
+        dmgSeverity={dmgSeverity}
+        setDmgSeverity={setDmgSeverity}
+        dmgNotes={dmgNotes}
+        setDmgNotes={setDmgNotes}
+        dmgError={dmgError}
+        setDmgError={setDmgError}
+        onSubmit={handleSubmitDamage}
+      />
 
       {/* ======================================================== */}
       {/* MODAL 4: TAMBAH ALAT BARU KE MASTER INVENTARIS */}
@@ -2548,7 +2730,7 @@ export default function KelolaAlatPage() {
                     : "bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300"
                 )}
               >
-                1. Hitungan Waktu
+                Hitungan Waktu
               </button>
               <button
                 type="button"
@@ -2565,7 +2747,7 @@ export default function KelolaAlatPage() {
                     : "bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300"
                 )}
               >
-                2. Hitungan Kali
+                Hitungan Kali
               </button>
             </div>
           </div>
@@ -2841,74 +3023,79 @@ export default function KelolaAlatPage() {
           </div>
         </div>
       </AppModal>
+
+      {/* ======================================================== */}
+      {/* MODAL 7: DETAIL RINCIAN RIWAYAT TINDAKAN MEDIS */}
+      {/* ======================================================== */}
+      <AppModal
+        isOpen={Boolean(selectedHistoryDetail)}
+        onClose={() => setSelectedHistoryDetail(null)}
+        title={`Detail Riwayat Tindakan: ${selectedHistoryDetail?.toolName || ""}`}
+        subtitle={`Rincian jam pelaksanaan dan perawat pelaksana di ${selectedBedForPanel}`}
+        icon={<Eye className="size-5 text-blue-600" />}
+        maxWidth="lg"
+        showFooter={false}
+      >
+        <div className="space-y-4">
+          <div className="p-3.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <div className="font-bold text-sm text-neutral-900 dark:text-neutral-100">
+                {selectedBedForPanel} • {currentBedPatient?.name || "Pasien HCU"}
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                No. RM: {currentBedPatient?.rm || "-"}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Total Tindakan:</span>
+              <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-mono font-bold text-xs">
+                {selectedHistoryDetail?.totalCount || 1}x Tindakan
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <h5 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+              Rincian Jam Pelaksanaan Tindakan
+            </h5>
+            <div className="divide-y divide-neutral-100 dark:divide-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-800 overflow-hidden max-h-60 overflow-y-auto">
+              {selectedHistoryDetail?.actionLogs && selectedHistoryDetail.actionLogs.length > 0 ? (
+                selectedHistoryDetail.actionLogs.map((log, idx) => (
+                  <div
+                    key={log.id || idx}
+                    className="p-3 flex items-center justify-between text-xs bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition gap-2"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="size-6 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 flex items-center justify-center font-bold text-[10px] shrink-0">
+                        #{selectedHistoryDetail.actionLogs!.length - idx}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 flex-wrap">
+                          <Clock className="size-3 text-muted-foreground shrink-0" />
+                          <span>{log.timeStr}</span>
+                          {log.dateStr && (
+                            <span className="text-muted-foreground font-normal">({log.dateStr})</span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground mt-0.5 break-words">
+                          Perawat: <strong className="text-neutral-800 dark:text-neutral-200">{log.nurseName}</strong>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 shrink-0">
+                      +{log.countAdded}x Tindakan
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 text-xs text-center text-muted-foreground">
+                  Waktu tindakan: {selectedHistoryDetail?.latestActionTime} oleh {selectedHistoryDetail?.startNurse}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </AppModal>
     </div>
   )
-}
-
-// ========================================================
-// FUNGSI HELPER WAKTU & SHIFT RUANG HCU
-// ========================================================
-
-export function getShiftInfo(now: Date): ShiftInfo {
-  const hours = now.getHours()
-  const minutes = now.getMinutes()
-  const timeVal = hours + minutes / 60
-
-  const yy = now.getFullYear()
-  const mm = String(now.getMonth() + 1).padStart(2, "0")
-  const dd = String(now.getDate()).padStart(2, "0")
-  const dateStr = `${yy}-${mm}-${dd}`
-
-  if (timeVal >= 7 && timeVal < 14) {
-    return {
-      type: "pagi",
-      name: "Pagi",
-      label: "Shift Pagi",
-      timeRange: "07.00 - 14.00 WIB",
-      nextShiftTime: "14.00 WIB",
-      shiftKey: `${dateStr}-pagi`,
-    }
-  } else if (timeVal >= 14 && timeVal < 21) {
-    return {
-      type: "siang",
-      name: "Siang",
-      label: "Shift Siang",
-      timeRange: "14.00 - 21.00 WIB",
-      nextShiftTime: "21.00 WIB",
-      shiftKey: `${dateStr}-siang`,
-    }
-  } else {
-    let shiftDateStr = dateStr
-    if (timeVal < 7) {
-      const yesterday = new Date(now)
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yyy = yesterday.getFullYear()
-      const ymm = String(yesterday.getMonth() + 1).padStart(2, "0")
-      const ydd = String(yesterday.getDate()).padStart(2, "0")
-      shiftDateStr = `${yyy}-${ymm}-${ydd}`
-    }
-
-    return {
-      type: "malam",
-      name: "Malam",
-      label: "Shift Malam",
-      timeRange: "21.00 - 07.00 WIB",
-      nextShiftTime: "07.00 WIB",
-      shiftKey: `${shiftDateStr}-malam`,
-    }
-  }
-}
-
-function getFormattedDate(d: Date): string {
-  const day = String(d.getDate()).padStart(2, "0")
-  const month = String(d.getMonth() + 1).padStart(2, "0")
-  const year = d.getFullYear()
-  return `${day}-${month}-${year}`
-}
-
-function getFormattedTime(d: Date): string {
-  const hh = String(d.getHours()).padStart(2, "0")
-  const mm = String(d.getMinutes()).padStart(2, "0")
-  const ss = String(d.getSeconds()).padStart(2, "0")
-  return `${hh}:${mm}:${ss}`
 }
